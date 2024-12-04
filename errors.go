@@ -10,4 +10,6 @@ var (
 	ErrInvalidSHA           = errors.New("invalid SHA")
 	ErrInvalidSignAlg       = errors.New("invalid signature algorithm")
 	ErrInvalidEncryptionAlg = errors.New("invalid encryption algorithm")
+	ErrInvalidSignature     = errors.New("invalid signature")
+	ErrUnsafeAlgorithm      = errors.New("unsafe algorithm for use in the clear")
 )

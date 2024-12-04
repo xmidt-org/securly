@@ -107,7 +107,7 @@ func TestCanonical(t *testing.T) {
 		{"SHA-1", nil},
 		{"", nil},
 
-		// Differnt case
+		// Different case
 		{"sha-256", &SHA256},
 		{"sHa-512", &SHA512},
 	}

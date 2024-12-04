@@ -5,25 +5,43 @@ package securly
 
 import (
 	"crypto/x509"
+	"encoding/base64"
+	"errors"
 	"fmt"
 
+	"github.com/lestrrat-go/jwx/v2/cert"
 	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwe"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jws"
+	"github.com/xmidt-org/securly/hash"
 	"github.com/xmidt-org/securly/internal/wire"
 )
 
-// Decoder contains the configuration for decoding a set of messages.
-type Decoder struct {
+// Decode converts a slice of bytes into a *Message if possible.  Depending on
+// the options provided, the function may also verify the signature of the
+// message.
+//
+// This function defaults secure, so it will verify the signature of the
+// message.  If you want to skip this verification, you can pass the
+// NoVerification() option.
+func Decode(buf []byte, opts ...DecoderOption) (*Message, error) {
+	p, err := newDecoder(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.decode(buf)
+}
+
+// decoder contains the configuration for decoding a set of messages.
+type decoder struct {
 	noVerification bool
 	trustedRootCAs []*x509.Certificate
 	policies       []string
 }
 
-// NewDecoder converts a slice of bytes plus options into a Message.
-func NewDecoder(opts ...DecoderOption) (*Decoder, error) {
-	var p Decoder
+// newDecoder converts a slice of bytes plus options into a Message.
+func newDecoder(opts ...DecoderOption) (*decoder, error) {
+	var p decoder
 
 	vadors := []DecoderOption{
 		validateRoots(),
@@ -41,8 +59,8 @@ func NewDecoder(opts ...DecoderOption) (*Decoder, error) {
 	return &p, nil
 }
 
-// Decode converts a slice of bytes into a *Message if possible.
-func (p *Decoder) Decode(buf []byte) (*Message, error) {
+// decode converts a slice of bytes into a *Message if possible.
+func (p *decoder) decode(buf []byte) (*Message, error) {
 	// Unmarshal the outer payload
 	var outer wire.Outer
 	left, err := outer.UnmarshalMsg(buf)
@@ -53,132 +71,100 @@ func (p *Decoder) Decode(buf []byte) (*Message, error) {
 		return nil, fmt.Errorf("%w leftover bytes", ErrInvalidPayload)
 	}
 
-	untrusted, err := jws.Parse([]byte(outer.JWS), jws.WithCompact())
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWS: %w", err)
-	}
-
 	// Verify the JWS signature if possible.
-	payload := untrusted.Payload()
 	if !p.noVerification {
-		err = validateSignature(outer.JWS, p.trustedRootCAs, p.policies)
-		if err != nil {
+		if err = validateSignature(outer.JWS, p.trustedRootCAs, p.policies); err != nil {
 			return nil, err
 		}
 	}
 
-	// Unmarshal the inner payload
-	var inner wire.Inner
-	_, err = inner.UnmarshalMsg(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal inner payload: %w", err)
-	}
-
-	// Verify the file hashes.
-	err = validateFiles(outer, inner)
+	trusted, err := jws.Parse([]byte(outer.JWS), jws.WithCompact())
 	if err != nil {
 		return nil, err
 	}
 
-	// Create the Message
-	msg := Message{
-		Payload: inner.Payload,
-		Files:   outer.Files,
-	}
-
-	if inner.Encrypt != nil {
-		alg, err := convertAlg(inner.Encrypt.Alg)
-		if err != nil {
-			return nil, err
-		}
-
-		msg.Response = &Encrypt{
-			Alg: alg,
-			Key: inner.Encrypt.Key,
-		}
-	}
-
-	return &msg, nil
-}
-
-// DecodeEncrypted converts a byte slice into a *Message and decodes
-// it it using the provided key.
-func DecodeEncrypted(buf []byte, key string) (*Message, error) {
-	// Parse the JWE to extract the header
-	msg, err := jwe.Parse(buf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWE: %w", err)
-	}
-
-	// Extract the algorithm from the JWE header
-	alg, ok := msg.ProtectedHeaders().Get(jwe.AlgorithmKey)
-	if !ok {
-		return nil, fmt.Errorf("algorithm not found in JWE header")
-	}
-
-	// Parse the JWK key
-	jwkKey, err := jwk.ParseKey([]byte(key))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWK key: %w", err)
-	}
-
-	// Decrypt the JWE
-	decrypted, err := jwe.Decrypt(buf, jwe.WithKey(alg.(jwa.KeyEncryptionAlgorithm), jwkKey))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt JWE: %w", err)
-	}
-
-	// Unmarshal the decrypted payload into wire.Encrypted
-	var encrypted wire.Encrypted
-	left, err := encrypted.UnmarshalMsg(decrypted)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal decrypted payload: %w", err)
-	}
-	if len(left) != 0 {
-		return nil, fmt.Errorf("%w leftover bytes", ErrInvalidPayload)
-	}
+	payload := trusted.Payload()
 
 	// Unmarshal the inner payload
 	var inner wire.Inner
-	_, err = inner.UnmarshalMsg(encrypted.Payload)
+	if _, err = inner.UnmarshalMsg(payload); err != nil {
+		return nil, err
+	}
+
+	// Verify the data hash.
+	sha := hash.Canonical(inner.Alg)
+	if sha == nil {
+		return nil, errors.Join(ErrInvalidSHA, fmt.Errorf("unsupported SHA algorithm %s", inner.Alg))
+	}
+
+	if !sha.Validate(inner.SHA, outer.Data) {
+		return nil, errors.Join(ErrInvalidSHA, ErrInvalidSignature)
+	}
+
+	msg, err := msgFromWire(outer.Data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal inner payload: %w", err)
+		return nil, err
 	}
 
-	// Create the Message
-	rv := Message{
-		Payload: encrypted.Payload,
-		Files:   encrypted.Files,
+	// The encryption algorithm must be safe to send in the clear, or this
+	// message is invalid.
+	if err := msg.Response.safeInTheClear(); err != nil {
+		return nil, err
 	}
 
-	if encrypted.Encrypt != nil {
-		alg, err := convertAlg(encrypted.Encrypt.Alg)
-		if err != nil {
-			return nil, err
-		}
-
-		rv.Response = &Encrypt{
-			Alg: alg,
-			Key: inner.Encrypt.Key,
-		}
-	}
-
-	return &rv, nil
+	return msg, nil
 }
 
-func convertAlg(alg string) (jwa.KeyEncryptionAlgorithm, error) {
-	list := jwa.KeyEncryptionAlgorithms()
-
-	for _, v := range list {
-		// Skip symmetric algorithms.
-		if v.IsSymmetric() {
-			continue
-		}
-
-		if v.String() == alg {
-			return v, nil
-		}
+func validateSignature(JWS string, roots []*x509.Certificate, policies []string) error {
+	untrusted, err := jws.Parse([]byte(JWS), jws.WithCompact())
+	if err != nil {
+		return err
 	}
 
-	return "", ErrInvalidEncryptionAlg
+	sigs := untrusted.Signatures()
+	if len(sigs) != 1 {
+		return fmt.Errorf("expecting exactly one signer, got %d", len(sigs))
+	}
+
+	signer := sigs[0]
+	headers := signer.ProtectedHeaders()
+
+	// Get the algorithm
+	alg, ok := headers.Get("alg")
+	if !ok {
+		return fmt.Errorf("alg header is missing")
+	}
+
+	// Get the x5c header
+	chain, ok := headers.Get("x5c")
+	if !ok || chain == nil {
+		return fmt.Errorf("x5c header is missing or invalid")
+	}
+
+	// Validate the cert chain and get the leaf node.
+	leaf, err := validateCertChain(roots, chain.(*cert.Chain), policies)
+	if err != nil {
+		return err
+	}
+
+	// Decode the first certificate in the x5c header
+	certData, err := base64.URLEncoding.DecodeString(leaf)
+	if err != nil {
+		return fmt.Errorf("failed to decode x5c certificate: %w", err)
+	}
+
+	// Parse the certificate to get the public key
+	cert, err := x509.ParseCertificate(certData)
+	if err != nil {
+		return fmt.Errorf("failed to parse x5c certificate: %w", err)
+	}
+
+	key := jws.WithKey(alg.(jwa.KeyAlgorithm), cert.PublicKey).(jws.VerifyOption)
+
+	_, err = jws.Verify([]byte(JWS), key)
+	if err != nil {
+		return fmt.Errorf("failed to verify JWS: %w", err)
+	}
+
+	return nil
 }

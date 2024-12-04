@@ -17,9 +17,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var errUnknown = fmt.Errorf("unknown error")
+
+var chainA = mustGeneratecertChain(
+	`leaf
+		<-ica(1.2.900,1.2.901)
+		<-ica(1.2.100)
+		<-root`)
+
+var chainB = mustGeneratecertChain(
+	`leaf
+		<-ica(1.2.900,1.2.901)
+		<-ica(1.2.100)
+		<-root`)
 
 type certChain struct {
 	leaf    *x509.Certificate
@@ -128,20 +144,6 @@ func generateCertChain(desc string) ([]*x509.Certificate, *ecdsa.PrivateKey, err
 	return certs, leafKey, nil
 }
 
-func mustGeneratecertChain(desc string) certChain {
-	certs, key, err := generateCertChain(desc)
-	if err != nil {
-		panic(err)
-	}
-
-	return certChain{
-		leaf:    certs[0],
-		leafKey: key,
-		chain:   certs[:len(certs)-1],
-		root:    certs[len(certs)-1],
-	}
-}
-
 // TestGenerateCertChain tests the generateCertChain function.
 func TestGenerateCertChain(t *testing.T) {
 	tests := []struct {
@@ -213,6 +215,20 @@ func TestGenerateCertChain(t *testing.T) {
 	}
 }
 
+func mustGeneratecertChain(desc string) certChain {
+	certs, key, err := generateCertChain(desc)
+	if err != nil {
+		panic(err)
+	}
+
+	return certChain{
+		leaf:    certs[0],
+		leafKey: key,
+		chain:   certs[:len(certs)-1],
+		root:    certs[len(certs)-1],
+	}
+}
+
 func TestMustGenerateChain(t *testing.T) {
 	got := mustGeneratecertChain("leaf<-ica(1.2.900,1.2.901)<-ica(1.2.100)<-root")
 
@@ -228,10 +244,27 @@ func TestMustGenerateChain(t *testing.T) {
 
 	assert.Equal("Leaf", got.leaf.Subject.Organization[0])
 
-	require.Equal(3, len(got.chain))
+	require.Len(got.chain, 3)
 	assert.Equal("Leaf", got.chain[0].Subject.Organization[0])
 	assert.Equal("Intermediate 2", got.chain[1].Subject.Organization[0])
 	assert.Equal("Intermediate 1", got.chain[2].Subject.Organization[0])
 
 	assert.Equal("Root", got.root.Subject.Organization[0])
+}
+
+func mustGenerateResponse(alg jwa.KeyEncryptionAlgorithm, c *x509.Certificate) *Encryption {
+	rv := Encryption{
+		Alg: alg,
+		Key: mustFromRaw(c.PublicKey),
+	}
+
+	return &rv
+}
+
+func mustFromRaw(a any) jwk.Key {
+	k, err := jwk.FromRaw(a)
+	if err != nil {
+		panic(err)
+	}
+	return k
 }

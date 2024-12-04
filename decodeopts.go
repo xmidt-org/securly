@@ -10,14 +10,7 @@ import (
 
 // Option is a functional option for the Instructions constructor.
 type DecoderOption interface {
-	apply(*Decoder) error
-}
-
-// TrustedRootCA specifies a root CA to trust when verifying the signature.
-func TrustRootCA(certs *x509.Certificate) DecoderOption {
-	return trustRootCAOption{
-		certs: []*x509.Certificate{certs},
-	}
+	apply(*decoder) error
 }
 
 // TrustRootCAs specifies a list of root CAs to trust when verifying the signature.
@@ -31,17 +24,9 @@ type trustRootCAOption struct {
 	certs []*x509.Certificate
 }
 
-func (t trustRootCAOption) apply(p *Decoder) error {
+func (t trustRootCAOption) apply(p *decoder) error {
 	p.trustedRootCAs = append(p.trustedRootCAs, t.certs...)
 	return nil
-}
-
-// RequirePolicy specifies a policy that must be present in the signing chain
-// intermediates.
-func RequirePolicy(policy string) DecoderOption {
-	return requirePoliciesOption{
-		policies: []string{policy},
-	}
 }
 
 // RequirePolicies specifies a list of policies that must be present in the
@@ -56,21 +41,21 @@ type requirePoliciesOption struct {
 	policies []string
 }
 
-func (r requirePoliciesOption) apply(p *Decoder) error {
+func (r requirePoliciesOption) apply(p *decoder) error {
 	p.policies = append(p.policies, r.policies...)
 	return nil
 }
 
-// WithoutVerification does not verify the signature or credentials, but decodes
+// NoVerification does not verify the signature or credentials, but decodes
 // the Message.  Generally this is only useful if testing.  DO NOT use this in
 // production.  This will intentionally conflict with the TrustedRootCA() option.
-func WithoutVerification() DecoderOption {
+func NoVerification() DecoderOption {
 	return withoutVerificationOption{}
 }
 
 type withoutVerificationOption struct{}
 
-func (withoutVerificationOption) apply(p *Decoder) error {
+func (withoutVerificationOption) apply(p *decoder) error {
 	p.noVerification = true
 	return nil
 }
@@ -83,7 +68,7 @@ func validateRoots() DecoderOption {
 
 type validateRootsOption struct{}
 
-func (v validateRootsOption) apply(p *Decoder) error {
+func (v validateRootsOption) apply(p *decoder) error {
 	if len(p.trustedRootCAs) == 0 && !p.noVerification {
 		return fmt.Errorf("no trusted root CAs provided")
 	}

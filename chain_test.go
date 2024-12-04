@@ -118,7 +118,7 @@ func TestValidateCertChain(t *testing.T) {
 				}
 				certBase64 := fn(cert.Raw)
 				err := certChain.AddString(certBase64)
-				assert.NoError(err)
+				require.NoError(err)
 			}
 
 			// Determine roots
@@ -131,9 +131,9 @@ func TestValidateCertChain(t *testing.T) {
 
 			if tt.err != nil {
 				assert.Empty(leaf)
-				assert.Error(err)
-				if tt.err != errUnknown {
-					assert.ErrorIs(err, tt.err)
+				require.Error(err)
+				if !errors.Is(errUnknown, tt.err) {
+					require.ErrorIs(err, tt.err)
 				}
 				return
 			}

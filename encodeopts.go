@@ -8,16 +8,17 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/xmidt-org/securly/hash"
 )
 
-// EncoderOption is a functional option for the Instructions constructor.
-type EncoderOption interface {
-	apply(*Encoder) error
+// EncodeOption is a functional option for the Instructions constructor.
+type EncodeOption interface {
+	apply(*encoder) error
 }
 
-// WithFileSHA sets the SHA algorithm used for files in the Message.
-func WithFileSHA(alg hash.SHA) EncoderOption {
+// WithHash sets the SHA algorithm used for files in the Message.
+func WithHash(alg hash.SHA) EncodeOption {
 	return shaOption{
 		alg: alg,
 	}
@@ -27,17 +28,31 @@ type shaOption struct {
 	alg hash.SHA
 }
 
-func (s shaOption) apply(enc *Encoder) error {
+func (s shaOption) apply(enc *encoder) error {
 	enc.shaAlg = &s.alg
 	return nil
 }
 
 // SignWith sets the signing algorithm, public key, and private key used to sign
 // the Message, as well as any intermediaries.
+//
+// The following combinations are valid (the public/private keys must match):
+// - ES256, private: *ecdsa.PrivateKey
+// - ES384, private: *ecdsa.PrivateKey
+// - ES512, private: *ecdsa.PrivateKey
+// - RS256, private: *rsa.PrivateKey
+// - RS384, private: *rsa.PrivateKey
+// - RS512, private: *rsa.PrivateKey
+// - PS256, private: *rsa.PrivateKey
+// - PS384, private: *rsa.PrivateKey
+// - PS512, private: *rsa.PrivateKey
+// - EdDSA, private: ed25519.PrivateKey
+//
+// Unfortunately, to make this work the private type needs to be an interface{}.
 func SignWith(alg jwa.SignatureAlgorithm,
-	public *x509.Certificate, private any,
+	public *x509.Certificate, private jwk.Key,
 	intermediates ...*x509.Certificate,
-) EncoderOption {
+) EncodeOption {
 	return signAlgOption{
 		alg:           alg,
 		public:        public,
@@ -46,14 +61,30 @@ func SignWith(alg jwa.SignatureAlgorithm,
 	}
 }
 
+func SignWithRaw(alg jwa.SignatureAlgorithm,
+	public *x509.Certificate, private any,
+	intermediates ...*x509.Certificate,
+) EncodeOption {
+	key, err := jwk.FromRaw(private)
+	if err != nil {
+		return errorEncode(err)
+	}
+
+	return SignWith(alg, public, key, intermediates...)
+}
+
 type signAlgOption struct {
 	alg           jwa.SignatureAlgorithm
 	public        *x509.Certificate
-	key           any
+	key           jwk.Key
 	intermediates []*x509.Certificate
 }
 
-func (s signAlgOption) apply(enc *Encoder) error {
+func (s signAlgOption) apply(enc *encoder) error {
+	if s.alg.IsSymmetric() || s.alg == jwa.NoSignature {
+		return ErrInvalidSignAlg
+	}
+
 	enc.signAlg = s.alg
 	enc.leaf = s.public
 	enc.key = s.key
@@ -61,31 +92,55 @@ func (s signAlgOption) apply(enc *Encoder) error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
-
-var safeAlgs = map[jwa.SignatureAlgorithm]struct{}{
-	jwa.ES256:  {},
-	jwa.ES256K: {},
-	jwa.ES384:  {},
-	jwa.ES512:  {},
-	jwa.EdDSA:  {},
-	jwa.PS256:  {},
-	jwa.PS384:  {},
-	jwa.PS512:  {},
-	jwa.RS256:  {},
-	jwa.RS384:  {},
-	jwa.RS512:  {},
+// NoSignature indicates that the Message should not be signed.  It cannot be used
+// with any SignWith options or an error will be returned.  This is to ensure that
+// the caller is aware that the Message will not be signed.
+func NoSignature() EncodeOption {
+	return noSignatureOption{}
 }
 
-func validateSigAlg() EncoderOption {
+type noSignatureOption struct{}
+
+func (n noSignatureOption) apply(enc *encoder) error {
+	enc.doNotSign = true
+	return nil
+}
+
+//------------------------------------------------------------------------------
+
+func errorEncode(err error) EncodeOption {
+	return errorEncodeOption{
+		err: err,
+	}
+}
+
+type errorEncodeOption struct {
+	err error
+}
+
+func (e errorEncodeOption) apply(*encoder) error {
+	return e.err
+}
+
+func validateSigAlg() EncodeOption {
 	return validateSigAlgOption{}
 }
 
 type validateSigAlgOption struct{}
 
-func (v validateSigAlgOption) apply(enc *Encoder) error {
-	if _, ok := safeAlgs[enc.signAlg]; !ok {
-		return fmt.Errorf("%w: unsafe value: %s", ErrInvalidSignAlg, enc.signAlg)
+func (v validateSigAlgOption) apply(enc *encoder) error {
+	if enc.doNotSign {
+		if enc.signAlg != "" ||
+			enc.leaf != nil ||
+			enc.key != nil ||
+			len(enc.intermediates) > 0 {
+			return fmt.Errorf("%w: NoSignature() must be used in isolation", ErrInvalidSignAlg)
+		}
+		return nil
+	}
+
+	if enc.signAlg == "" || enc.key == nil {
+		return fmt.Errorf("%w: algorithm and key are required", ErrInvalidSignAlg)
 	}
 
 	return nil
