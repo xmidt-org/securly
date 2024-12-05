@@ -48,6 +48,10 @@ type File struct {
 	// Data is the file data.
 	Data []byte `msg:"data"`
 
+	// Size is the file size.  Note that this is not len(Data) since the
+	// data may not be sent over the wire.
+	Size int64 `msg:"size,omitempty"`
+
 	// Mode is the file mode.
 	Mode uint32 `msg:"mode,omitempty"`
 

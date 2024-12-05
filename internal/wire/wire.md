@@ -73,6 +73,7 @@ The `File` structure represents a file that is sent over the wire. It includes t
 
 ```
 File ::= { "data":    FileData,
+           "size":    Size,
            "mode":    FileMode,
            "modtime": FileModTime,
            "owner":   Owner
@@ -82,6 +83,8 @@ File ::= { "data":    FileData,
          }
 
 FileData ::= binary
+
+Size ::= int64
 
 FileMode ::= uint32 | nil
 

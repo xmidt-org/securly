@@ -67,6 +67,10 @@ type File struct {
 	// Data is the file content.
 	Data []byte
 
+	// Size is the file size.  Note that the data slice may not be the full file
+	// content.
+	Size int64
+
 	// Mode is the file mode.
 	Mode fs.FileMode
 
@@ -141,6 +145,7 @@ func (m Message) toWire() ([]byte, error) {
 func (f File) toWire() wire.File {
 	return wire.File{
 		Data:    f.Data,
+		Size:    f.Size,
 		Mode:    uint32(f.Mode),
 		ModTime: f.ModTime,
 		Owner:   f.Owner,
