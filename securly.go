@@ -105,7 +105,7 @@ type Encryption struct {
 }
 
 // Encode converts a Message into a slice of bytes based on the data present in
-// the Reponse field.  If the Response field is nil, the message is encoded as
+// the Response field.  If the Response field is nil, the message is encoded as
 // an unsigned message.  If the Response field is present, the message is
 // encrypted using the provided instructions.
 func (m Message) Encode() (data []byte, isEncrypted bool, err error) {

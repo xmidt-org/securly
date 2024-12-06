@@ -264,10 +264,10 @@ func TestEncode(t *testing.T) {
 			data, isEncrypted, err := tt.message.Encode()
 			assert.Equal(t, tt.expectEncrypt, isEncrypted)
 			if tt.expectErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Empty(t, data)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotEmpty(t, data)
 			}
 		})
