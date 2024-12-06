@@ -14,7 +14,7 @@ import (
 
 type encodeDecodeTest struct {
 	desc    string
-	encOpts []EncodeOption
+	encOpts []SignOption
 	input   Message
 	encErr  error
 	decOpts []DecoderOption
@@ -24,7 +24,7 @@ type encodeDecodeTest struct {
 
 var simpleWorking = encodeDecodeTest{
 	desc: "simple, working",
-	encOpts: []EncodeOption{
+	encOpts: []SignOption{
 		SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
 	},
 	input: Message{
@@ -38,7 +38,7 @@ var simpleWorking = encodeDecodeTest{
 
 var complexWorking = encodeDecodeTest{
 	desc: "complex, working",
-	encOpts: []EncodeOption{
+	encOpts: []SignOption{
 		SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
 	},
 	input: Message{
@@ -67,7 +67,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	complexWorking,
 	{
 		desc: "NoSignature()/NoVerification(), working",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			NoSignature(),
 		},
 		input: Message{
@@ -78,7 +78,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		},
 	}, {
 		desc: "Signature with NoVerification(), working",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
 		},
 		input: Message{
@@ -89,7 +89,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		},
 	}, {
 		desc: "NoSignature() with verification, should fail",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			NoSignature(),
 		},
 		input: Message{
@@ -101,7 +101,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		decErr: errUnknown,
 	}, {
 		desc: "Try using signing algorith none, should fail",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			SignWith("none", nil, nil),
 		},
 		input: Message{
@@ -110,7 +110,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		encErr: ErrInvalidSignAlg,
 	}, {
 		desc: "Try setting multiple signing algorithms, should fail",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			NoSignature(),
 			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
 		},
@@ -120,7 +120,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		encErr: ErrInvalidSignAlg,
 	}, {
 		desc: "invalid response encryption algorithm",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
 		},
 		input: Message{
@@ -133,7 +133,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		encErr: ErrInvalidEncryptionAlg,
 	}, {
 		desc: "unsafe response encryption algorithm	in the clear is not allowed",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
 		},
 		input: Message{
@@ -146,7 +146,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		encErr: ErrUnsafeAlgorithm,
 	}, {
 		desc: "invalid response encryption key/alg combination",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
 		},
 		input: Message{
@@ -159,7 +159,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		encErr: errUnknown,
 	}, {
 		desc: "untrusted chain",
-		encOpts: []EncodeOption{
+		encOpts: []SignOption{
 			SignWithRaw(jwa.ES256, chainB.leaf, chainB.leafKey, chainB.chain...),
 		},
 		input: Message{
@@ -176,7 +176,7 @@ func TestSigningTampering(t *testing.T) {
 	// Require everything to prevent 100s of duplicate errors.
 	require := require.New(t)
 
-	buf, err := complexWorking.input.Encode(complexWorking.encOpts...)
+	buf, err := complexWorking.input.Sign(complexWorking.encOpts...)
 	require.NoError(err)
 	require.NotNil(buf)
 
@@ -209,7 +209,7 @@ func runEncDecTest(t *testing.T, tt encodeDecodeTest) {
 		assert := assert.New(t)
 		require := require.New(t)
 
-		buf, err := tt.input.Encode(tt.encOpts...)
+		buf, err := tt.input.Sign(tt.encOpts...)
 		if tt.encErr != nil {
 			assert.Nil(buf)
 			require.Error(err)

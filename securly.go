@@ -104,9 +104,24 @@ type Encryption struct {
 	Key jwk.Key `msg:"key"`
 }
 
-// Encode converts a Message into a slice of bytes and signs it using the
+// Encode converts a Message into a slice of bytes based on the data present in
+// the Reponse field.  If the Response field is nil, the message is encoded as
+// an unsigned message.  If the Response field is present, the message is
+// encrypted using the provided instructions.
+func (m Message) Encode() (data []byte, isEncrypted bool, err error) {
+	if m.Response.IsZero() {
+		data, err = m.Sign(NoSignature())
+		return
+	}
+
+	data, err = m.Encrypt()
+	isEncrypted = true
+	return
+}
+
+// Sign converts a Message into a slice of bytes and signs it using the
 // provided options.
-func (m Message) Encode(opts ...EncodeOption) ([]byte, error) {
+func (m Message) Sign(opts ...SignOption) ([]byte, error) {
 	enc, err := newEncoder(opts...)
 	if err != nil {
 		return nil, err

@@ -11,8 +11,8 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
-// EncodeOption is a functional option for the Instructions constructor.
-type EncodeOption interface {
+// SignOption is a functional option for the Instructions constructor.
+type SignOption interface {
 	apply(*encoder) error
 }
 
@@ -35,7 +35,7 @@ type EncodeOption interface {
 func SignWith(alg jwa.SignatureAlgorithm,
 	public *x509.Certificate, private jwk.Key,
 	intermediates ...*x509.Certificate,
-) EncodeOption {
+) SignOption {
 	return signAlgOption{
 		alg:           alg,
 		public:        public,
@@ -47,10 +47,10 @@ func SignWith(alg jwa.SignatureAlgorithm,
 func SignWithRaw(alg jwa.SignatureAlgorithm,
 	public *x509.Certificate, private any,
 	intermediates ...*x509.Certificate,
-) EncodeOption {
+) SignOption {
 	key, err := jwk.FromRaw(private)
 	if err != nil {
-		return errorEncode(err)
+		return errorSign(err)
 	}
 
 	return SignWith(alg, public, key, intermediates...)
@@ -78,7 +78,7 @@ func (s signAlgOption) apply(enc *encoder) error {
 // NoSignature indicates that the Message should not be signed.  It cannot be used
 // with any SignWith options or an error will be returned.  This is to ensure that
 // the caller is aware that the Message will not be signed.
-func NoSignature() EncodeOption {
+func NoSignature() SignOption {
 	return noSignatureOption{}
 }
 
@@ -91,21 +91,21 @@ func (n noSignatureOption) apply(enc *encoder) error {
 
 //------------------------------------------------------------------------------
 
-func errorEncode(err error) EncodeOption {
-	return errorEncodeOption{
+func errorSign(err error) SignOption {
+	return errorSignOption{
 		err: err,
 	}
 }
 
-type errorEncodeOption struct {
+type errorSignOption struct {
 	err error
 }
 
-func (e errorEncodeOption) apply(*encoder) error {
+func (e errorSignOption) apply(*encoder) error {
 	return e.err
 }
 
-func validateSigAlg() EncodeOption {
+func validateSigAlg() SignOption {
 	return validateSigAlgOption{}
 }
 

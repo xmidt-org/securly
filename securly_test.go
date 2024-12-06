@@ -4,10 +4,15 @@
 package securly
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"testing"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -137,6 +142,135 @@ func TestMarshalErrors(t *testing.T) {
 			continue
 		}
 		require.Error(t, err)
+	}
+}
+
+func TestEncode(t *testing.T) {
+	// Generate test keys
+	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	ecdsaPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	// Convert keys to JWK
+	rsaJWK, err := jwk.FromRaw(rsaPrivateKey)
+	require.NoError(t, err)
+
+	ecdsaJWK, err := jwk.FromRaw(ecdsaPrivateKey)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name          string
+		message       Message
+		expectErr     bool
+		expectEncrypt bool
+	}{
+		{
+			name: "unsigned message",
+			message: Message{
+				Payload: []byte("Hello, world."),
+				Files: map[string]File{
+					"file1": {
+						Data:    []byte("file1 data"),
+						Size:    1000,
+						Mode:    0644,
+						ModTime: time.Now(),
+						Owner:   "owner",
+						UID:     1000,
+						Group:   "group",
+						GID:     1000,
+					},
+				},
+			},
+			expectErr:     false,
+			expectEncrypt: false,
+		},
+		{
+			name: "encrypted message with RSA key",
+			message: Message{
+				Payload: []byte("Hello, world."),
+				Files: map[string]File{
+					"file1": {
+						Data:    []byte("file1 data"),
+						Size:    1000,
+						Mode:    0644,
+						ModTime: time.Now(),
+						Owner:   "owner",
+						UID:     1000,
+						Group:   "group",
+						GID:     1000,
+					},
+				},
+				Response: &Encryption{
+					Alg: jwa.RSA_OAEP,
+					Key: rsaJWK,
+				},
+			},
+			expectErr:     false,
+			expectEncrypt: true,
+		},
+		{
+			name: "encrypted message with ECDSA key",
+			message: Message{
+				Payload: []byte("Hello, world."),
+				Files: map[string]File{
+					"file1": {
+						Data:    []byte("file1 data"),
+						Size:    1000,
+						Mode:    0644,
+						ModTime: time.Now(),
+						Owner:   "owner",
+						UID:     1000,
+						Group:   "group",
+						GID:     1000,
+					},
+				},
+				Response: &Encryption{
+					Alg: jwa.ECDH_ES,
+					Key: ecdsaJWK,
+				},
+			},
+			expectErr:     false,
+			expectEncrypt: true,
+		},
+		{
+			name: "invalid encryption algorithm",
+			message: Message{
+				Payload: []byte("Hello, world."),
+				Files: map[string]File{
+					"file1": {
+						Data:    []byte("file1 data"),
+						Size:    1000,
+						Mode:    0644,
+						ModTime: time.Now(),
+						Owner:   "owner",
+						UID:     1000,
+						Group:   "group",
+						GID:     1000,
+					},
+				},
+				Response: &Encryption{
+					Alg: jwa.ECDH_ES,
+				},
+			},
+			expectErr:     true,
+			expectEncrypt: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, isEncrypted, err := tt.message.Encode()
+			assert.Equal(t, tt.expectEncrypt, isEncrypted)
+			if tt.expectErr {
+				assert.Error(t, err)
+				assert.Empty(t, data)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, data)
+			}
+		})
 	}
 }
 

@@ -22,7 +22,7 @@ type encoder struct {
 	skipResponseCheck bool
 }
 
-func newEncoder(opts ...EncodeOption) (*encoder, error) {
+func newEncoder(opts ...SignOption) (*encoder, error) {
 	enc := encoder{}
 
 	opts = append(opts, validateSigAlg())
