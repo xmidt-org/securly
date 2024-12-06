@@ -52,6 +52,14 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
 
+const (
+	// EncryptedContentType is the content type for encrypted messages.
+	EncryptedContentType = "application/securly+jwe"
+
+	// SignedContentType is the content type for signed messages.
+	SignedContentType = "application/securly+jws"
+)
+
 // Message is a secure message.
 type Message struct {
 	// Payload is the main payload of the message.
