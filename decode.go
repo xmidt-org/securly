@@ -6,14 +6,11 @@ package securly
 import (
 	"crypto/x509"
 	"encoding/base64"
-	"errors"
 	"fmt"
 
 	"github.com/lestrrat-go/jwx/v2/cert"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jws"
-	"github.com/xmidt-org/securly/hash"
-	"github.com/xmidt-org/securly/internal/wire"
 )
 
 // Decode converts a slice of bytes into a *Message if possible.  Depending on
@@ -61,24 +58,19 @@ func newDecoder(opts ...DecoderOption) (*decoder, error) {
 
 // decode converts a slice of bytes into a *Message if possible.
 func (p *decoder) decode(buf []byte) (*Message, error) {
-	// Unmarshal the outer payload
-	var outer wire.Outer
-	left, err := outer.UnmarshalMsg(buf)
+	JWS, err := decompress(buf)
 	if err != nil {
 		return nil, err
-	}
-	if len(left) != 0 {
-		return nil, fmt.Errorf("%w leftover bytes", ErrInvalidPayload)
 	}
 
 	// Verify the JWS signature if possible.
 	if !p.noVerification {
-		if err = validateSignature(outer.JWS, p.trustedRootCAs, p.policies); err != nil {
+		if err = validateSignature(JWS, p.trustedRootCAs, p.policies); err != nil {
 			return nil, err
 		}
 	}
 
-	trusted, err := jws.Parse([]byte(outer.JWS), jws.WithCompact())
+	trusted, err := jws.Parse(JWS, jws.WithCompact())
 	if err != nil {
 		return nil, err
 	}
@@ -86,23 +78,8 @@ func (p *decoder) decode(buf []byte) (*Message, error) {
 	payload := trusted.Payload()
 
 	// Unmarshal the inner payload
-	var inner wire.Inner
-	if _, err = inner.UnmarshalMsg(payload); err != nil {
-		return nil, err
-	}
-
-	// Verify the data hash.
-	sha := hash.Canonical(inner.Alg)
-	if sha == nil {
-		return nil, errors.Join(ErrInvalidSHA, fmt.Errorf("unsupported SHA algorithm %s", inner.Alg))
-	}
-
-	if !sha.Validate(inner.SHA, outer.Data) {
-		return nil, errors.Join(ErrInvalidSHA, ErrInvalidSignature)
-	}
-
-	msg, err := msgFromWire(outer.Data)
-	if err != nil {
+	var msg Message
+	if _, err = msg.UnmarshalMsg(payload); err != nil {
 		return nil, err
 	}
 
@@ -112,11 +89,11 @@ func (p *decoder) decode(buf []byte) (*Message, error) {
 		return nil, err
 	}
 
-	return msg, nil
+	return &msg, nil
 }
 
-func validateSignature(JWS string, roots []*x509.Certificate, policies []string) error {
-	untrusted, err := jws.Parse([]byte(JWS), jws.WithCompact())
+func validateSignature(JWS []byte, roots []*x509.Certificate, policies []string) error {
+	untrusted, err := jws.Parse(JWS, jws.WithCompact())
 	if err != nil {
 		return err
 	}
@@ -161,7 +138,7 @@ func validateSignature(JWS string, roots []*x509.Certificate, policies []string)
 
 	key := jws.WithKey(alg.(jwa.KeyAlgorithm), cert.PublicKey).(jws.VerifyOption)
 
-	_, err = jws.Verify([]byte(JWS), key)
+	_, err = jws.Verify(JWS, key)
 	if err != nil {
 		return fmt.Errorf("failed to verify JWS: %w", err)
 	}

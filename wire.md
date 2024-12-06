@@ -17,41 +17,10 @@ the protocol to coexist.
 
 ## 2. Data Structures
 
-### 2.1 Outer
+### 2.1 Message
 
-The `Outer` structure is the top-level container for the wire payload. It contains
-the signed JSON Web Signature (JWS) and the actual data being transmitted.
-
-#### MsgPack Representation
-
-```
-Outer ::= { "jws":  JWS,
-            "data": Data }
-
-JWS ::= string
-
-Data ::= binary
-```
-
-### 2.2 Inner
-
-The `Inner` structure represents the JWS payload over the wire.  It includes the
-SHA algorithm and SHA of the binary data from the `Inner` structure.
-
-#### MsgPack Representation
-
-```
-Inner ::= { "alg": Algorithm,
-            "sha": SHA }
-
-Algorithm ::= string
-
-SHA ::= binary
-```
-
-### 2.2 Message
-
-The `Message` structure represents the useful data that is sent over the wire. It includes the payload, optional files, and an optional response.
+The `Message` structure represents the useful data that is sent over the wire. It
+includes the payload, optional files, and an optional response.
 
 #### MsgPack Representation
 
@@ -65,9 +34,10 @@ Files ::= map<string, File>
 Response ::= Encryption | nil
 ```
 
-### 2.3 File
+### 2.2 File
 
-The `File` structure represents a file that is sent over the wire. It includes the file data, mode, modification time, and owner.
+The `File` structure represents a file that is sent over the wire. It includes
+the file data, mode, modification time, and owner.
 
 #### MsgPack Representation
 
@@ -95,7 +65,7 @@ Owner ::= string | nil
 ID ::= uint32 | nil
 ```
 
-### 2.4 Encryption
+### 2.3 Encryption
 
 The `Encryption` structure contains instructions for how to encrypt the response.
 
@@ -119,24 +89,34 @@ To encode a `Message`:
 
 1. Create a `Message` instance with the desired payload, files, and response.
 2. Encode the `Message` instance using MsgPack.
-3. Compute the SHA of the encoded data.
-4. Create a JWS that includes the SHA of the data.
-5. Create an `Outer` instance with the JWS and the encoded data.
-6. Encode the `Outer` instance using MsgPack.
+3. Create a JWS that includes the `Message`.
+4. Compress the resulting JWS using Gzip.
 
 ### 3.2 Decoding
 
-To decode an `Outer`:
+To decode a `Message`:
 
-1. Decode the `Outer` instance using MsgPack.
+1. Uncompress the data using Gzip.
 2. Verify the JWS signature.
-3. Compute the SHA of the data and compare it with the SHA in the JWS.
-4. Decode the data into a `Message` instance using MsgPack.
+3. Extract the payload of the JWS a `Message` instance using MsgPack.
 
 ## 4. Encrypting and Decrypting
 
-The encrypted form of the data structures are simplified and contain only the
-`Message` structure and the sub structures in a standard JWE.
+The encrypted form of the data structures are similar, but the compression steps
+happen at different points.
+
+### 4.1 Encrypting
+
+1. Create a `Message` instance with the desired payload, files, and response.
+2. Encode the `Message` instance using MsgPack.
+3. Compress the resulting binary using Gzip.
+4. Create a JWE that includes the compressed data.
+
+### 4.2 Decrypting
+
+1. Decrypt the data of the JWE.
+2. Decompress the resulting payload using Gzip.
+3. Convert the MsgPack encoded data into a `Message`
 
 ## 5. Security Considerations
 

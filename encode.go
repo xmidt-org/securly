@@ -12,7 +12,6 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jws"
 	"github.com/xmidt-org/securly/hash"
-	"github.com/xmidt-org/securly/internal/wire"
 )
 
 type encoder struct {
@@ -62,24 +61,14 @@ func (enc *encoder) encode(m Message) ([]byte, error) {
 		}
 	}
 
-	data, err := m.toWire()
-	if err != nil {
-		return nil, err
-	}
-
-	inner := wire.Inner{
-		Alg: enc.shaAlg.String(),
-		SHA: enc.shaAlg.Sum(data),
-	}
-
-	innerBytes, err := inner.MarshalMsg(nil)
+	data, err := m.MarshalMsg(nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var signed []byte
 	if enc.doNotSign {
-		signed, err = jws.Sign(innerBytes, jws.WithInsecureNoSignature())
+		signed, err = jws.Sign(data, jws.WithInsecureNoSignature())
 		if err != nil {
 			return nil, err
 		}
@@ -103,17 +92,11 @@ func (enc *encoder) encode(m Message) ([]byte, error) {
 		key := jws.WithKey(enc.signAlg, enc.key, jws.WithProtectedHeaders(headers))
 
 		// Sign the inner payload with the private key.
-		signed, err = jws.Sign(innerBytes, key)
+		signed, err = jws.Sign(data, key)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Assemble the outer payload.
-	outer := wire.Outer{
-		JWS:  string(signed),
-		Data: data,
-	}
-
-	return sanitize(outer.MarshalMsg(nil))
+	return compress(signed)
 }

@@ -5,7 +5,6 @@ package securly
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -159,14 +158,11 @@ func runEncryptDecryptTest(t *testing.T, tt encryptDecryptTest) {
 			want = tt.output
 		}
 
-		if want.Files == nil {
-			want.Files = make(map[string]File)
-		}
 		assert.Equal(want, msg)
 	})
 }
 func TestEncryptingTampering(t *testing.T) {
-	assert := assert.New(t)
+	// Require everything to prevent 100s of duplicate errors.
 	require := require.New(t)
 
 	buf, err := encryptResponseKey.input.Encrypt(encryptResponseKey.encOpts...)
@@ -174,14 +170,12 @@ func TestEncryptingTampering(t *testing.T) {
 	require.NotNil(buf)
 
 	for i := 0; i < len(buf); i++ {
-		t.Run(fmt.Sprintf("idx=%d", i), func(t *testing.T) {
-			tmp := make([]byte, len(buf))
-			copy(tmp, buf)
-			tmp[i] = tmp[i] ^ 0xff
+		tmp := make([]byte, len(buf))
+		copy(tmp, buf)
+		tmp[i] = tmp[i] ^ 0xff
 
-			msg, err := Decrypt(tmp, encryptExternalKey.decOpts...)
-			assert.Nil(msg, "idx=%d 0x%02x '%c'", i, tmp[i]^0xff, tmp[i]^0xff)
-			assert.Error(err)
-		})
+		msg, err := Decrypt(tmp, encryptExternalKey.decOpts...)
+		require.Nil(msg, "idx=%d 0x%02x '%c'", i, tmp[i]^0xff, tmp[i]^0xff)
+		require.Error(err)
 	}
 }

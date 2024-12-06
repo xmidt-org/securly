@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2024 Comcast Cable Communications Management, LLC
 // SPDX-License-Identifier: Apache-2.0
 
+//go:generate msgp -io=false
+//msgp:newtime
+//msgp:replace fs.FileMode with:uint32
+//msgp:shim jwk.Key as:string using:keyToString/stringToKey
+//msgp:shim jwa.KeyEncryptionAlgorithm as:string using:jwaToString/stringToJWA
+
 // Package securly provides functionality for securely encoding, decoding,
 // encrypting and decrypting messages sent over the wire.
 //
@@ -44,59 +50,58 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwe"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/xmidt-org/securly/internal/wire"
 )
 
 // Message is a secure message.
 type Message struct {
 	// Payload is the main payload of the message.
-	Payload []byte
+	Payload []byte `msg:"payload"`
 
 	// Files is a map of filenames to file data.  When sent over the wire, the
 	// file signatures are sent and validated to ensure the files are not
 	// tampered with.
-	Files map[string]File
+	Files map[string]File `msg:"files,omitempty"`
 
 	// Response is the instructions for how to encrypt the response, if that is
 	// required.
-	Response *Encryption
+	Response *Encryption `msg:"response,omitzero"`
 }
 
 // A File describes a single file.
 type File struct {
 	// Data is the file content.
-	Data []byte
+	Data []byte `msg:"data"`
 
 	// Size is the file size.  Note that the data slice may not be the full file
 	// content.
-	Size int64
+	Size int64 `msg:"size,omitempty"`
 
 	// Mode is the file mode.
-	Mode fs.FileMode
+	Mode fs.FileMode `msg:"mode,omitempty"`
 
 	// ModTime is the file modification time.
-	ModTime time.Time
+	ModTime time.Time `msg:"modtime,omitempty"`
 
 	// Owner is the file owner.
-	Owner string
+	Owner string `msg:"owner,omitempty"`
 
 	// UID is the file owner's User ID.
-	UID uint32
+	UID uint32 `msg:"uid,omitempty"`
 
 	// Group is the file group.
-	Group string
+	Group string `msg:"group,omitempty"`
 
 	// GID is the file group's Group ID.
-	GID uint32
+	GID uint32 `msg:"gid,omitempty"`
 }
 
 // Encryption is the instructions for how to encrypt the response.
 type Encryption struct {
 	// Alg is the algorithm used to encrypt the payload.
-	Alg jwa.KeyEncryptionAlgorithm
+	Alg jwa.KeyEncryptionAlgorithm `msg:"alg"`
 
 	// Key is the key used to encrypt the payload.
-	Key jwk.Key
+	Key jwk.Key `msg:"key"`
 }
 
 // Encode converts a Message into a slice of bytes and signs it using the
@@ -120,60 +125,10 @@ func (m Message) Encrypt(opts ...EncryptOption) ([]byte, error) {
 	return enc.encrypt(m)
 }
 
-// toWire converts a Message into a wire.Message.
-func (m Message) toWire() ([]byte, error) {
-	enc, err := m.Response.toWire()
-	if err != nil {
-		return nil, err
-	}
-
-	msg := wire.Message{
-		Payload:  m.Payload,
-		Response: enc,
-		Files:    make(map[string]wire.File, len(m.Files)),
-	}
-
-	for filename, filedata := range m.Files {
-		msg.Files[filename] = filedata.toWire()
-	}
-
-	return sanitize(msg.MarshalMsg(nil))
-}
-
 //------------------------------------------------------------------------------
 
-func (f File) toWire() wire.File {
-	return wire.File{
-		Data:    f.Data,
-		Size:    f.Size,
-		Mode:    uint32(f.Mode),
-		ModTime: f.ModTime,
-		Owner:   f.Owner,
-		UID:     f.UID,
-		Group:   f.Group,
-		GID:     f.GID,
-	}
-}
-
-// toWire converts an Encryption into a wire.Response.
-func (e *Encryption) toWire() (*wire.Encryption, error) {
-	if e == nil {
-		return nil, nil
-	}
-
-	if e.Alg == "" && e.Key == nil {
-		return nil, nil
-	}
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(e.Key); err != nil {
-		return nil, err
-	}
-
-	return &wire.Encryption{
-		Alg: e.Alg.String(),
-		Key: buf.String(),
-	}, nil
+func (e *Encryption) IsZero() bool {
+	return e == nil || (e.Alg == "" && e.Key == nil)
 }
 
 func (e *Encryption) safeInTheClear() error {
@@ -224,4 +179,47 @@ func (e *Encryption) verify() error {
 	}
 
 	return nil
+}
+
+//------------------------------------------------------------------------------
+
+func keyToString(key jwk.Key) string {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(key); err != nil {
+		return ""
+	}
+
+	return buf.String()
+}
+
+func stringToKey(s string) jwk.Key {
+	key, err := jwk.ParseKey([]byte(s))
+	if err != nil {
+		return nil
+	}
+
+	return key
+}
+
+func jwaToString(alg jwa.KeyEncryptionAlgorithm) string {
+	return alg.String()
+}
+
+func stringToJWA(s string) jwa.KeyEncryptionAlgorithm {
+	list := jwa.KeyEncryptionAlgorithms()
+	for _, v := range list {
+		if v.String() == s {
+			return v
+		}
+	}
+
+	return ""
+}
+
+func sanitize(b []byte, err error) ([]byte, error) {
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }

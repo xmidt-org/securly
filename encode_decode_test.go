@@ -5,7 +5,6 @@ package securly
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -174,7 +173,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 }
 
 func TestSigningTampering(t *testing.T) {
-	assert := assert.New(t)
+	// Require everything to prevent 100s of duplicate errors.
 	require := require.New(t)
 
 	buf, err := complexWorking.input.Encode(complexWorking.encOpts...)
@@ -182,15 +181,20 @@ func TestSigningTampering(t *testing.T) {
 	require.NotNil(buf)
 
 	for i := 0; i < len(buf); i++ {
-		t.Run(fmt.Sprintf("idx=%d", i), func(t *testing.T) {
-			tmp := make([]byte, len(buf))
-			copy(tmp, buf)
-			tmp[i] = tmp[i] ^ 0xff
+		tmp := make([]byte, len(buf))
+		copy(tmp, buf)
+		tmp[i] = tmp[i] ^ 0xff
 
-			msg, err := Decode(tmp, complexWorking.decOpts...)
-			assert.Nil(msg, "idx=%d 0x%02x '%c'", i, tmp[i]^0xff, tmp[i]^0xff)
-			assert.Error(err)
-		})
+		msg, err := Decode(tmp, complexWorking.decOpts...)
+
+		// Sometimes changing gzip data can result in the original message.
+		if err == nil && msg != nil {
+			require.Equal(&complexWorking.input, msg)
+			continue
+		}
+
+		require.Nil(msg, "idx=%d 0x%02x '%c'", i, tmp[i]^0xff, tmp[i]^0xff)
+		require.Error(err)
 	}
 }
 
@@ -235,9 +239,6 @@ func runEncDecTest(t *testing.T, tt encodeDecodeTest) {
 			want = tt.output
 		}
 
-		if want.Files == nil {
-			want.Files = make(map[string]File)
-		}
 		require.Equal(want, msg)
 	})
 }

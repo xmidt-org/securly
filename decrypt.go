@@ -30,13 +30,13 @@ func Decrypt(buf []byte, opts ...DecryptOption) (*Message, error) {
 	}
 
 	// Parse the JWE to extract the header
-	msg, err := jwe.Parse(buf)
+	JWE, err := jwe.Parse(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	// Extract the algorithm from the JWE header
-	alg, ok := msg.ProtectedHeaders().Get(jwe.AlgorithmKey)
+	alg, ok := JWE.ProtectedHeaders().Get(jwe.AlgorithmKey)
 	if !ok {
 		return nil, err
 	}
@@ -47,5 +47,16 @@ func Decrypt(buf []byte, opts ...DecryptOption) (*Message, error) {
 		return nil, err
 	}
 
-	return msgFromWire(decrypted)
+	bytes, err := decompress(decrypted)
+	if err != nil {
+		return nil, err
+	}
+
+	var msg Message
+	_, err = msg.UnmarshalMsg(bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return &msg, nil
 }

@@ -59,7 +59,12 @@ func (enc *encrypter) encrypt(m Message) ([]byte, error) {
 	if enc.alg == "" {
 		m.Response = nil
 	}
-	payload, err := m.toWire()
+	bytes, err := m.MarshalMsg(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	payload, err := compress(bytes)
 	if err != nil {
 		return nil, err
 	}
