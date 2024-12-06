@@ -5,6 +5,7 @@ package securly
 
 import (
 	"testing"
+	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/stretchr/testify/assert"
@@ -97,3 +98,87 @@ func TestVerify(t *testing.T) {
 		})
 	}
 }
+
+func TestMarshalErrors(t *testing.T) {
+	good := Message{
+		Payload: []byte("Hello, world."),
+		Files: map[string]File{
+			"file1": {
+				Data:    []byte("file1 data"),
+				Size:    1000,
+				Mode:    0644,
+				ModTime: time.Now(),
+				Owner:   "owner",
+				UID:     1000,
+				Group:   "group",
+				GID:     1000,
+			},
+		},
+		Response: &Encryption{
+			Alg: jwa.DIRECT,
+			Key: mustFromRaw(chainA.leaf.PublicKey),
+		},
+	}
+
+	bytes, err := good.MarshalMsg(nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, bytes)
+
+	for i := 0; i < len(bytes); i++ {
+		tmp := bytes
+		tmp[i] = tmp[i] ^ 0xff
+
+		var got Message
+		n, err := got.UnmarshalMsg(tmp)
+
+		require.Zero(t, n)
+		if err == nil {
+			require.Equal(t, good, got)
+			continue
+		}
+		require.Error(t, err)
+	}
+}
+
+/*
+func FuzzMarshalUnmarshal(f *testing.F) {
+	// Seed the fuzzer with a valid Message
+	good := Message{
+		Payload: []byte("Hello, world."),
+		Files: map[string]File{
+			"file1": {
+				Data:  []byte("file1 data"),
+				Size:  1000,
+				Mode:  0644,
+				Owner: "owner",
+				UID:   1000,
+				Group: "group",
+				GID:   1000,
+			},
+		},
+		Response: &Encryption{
+			Alg: jwa.DIRECT,
+			Key: mustFromRaw(chainA.leaf.PublicKey),
+		},
+	}
+
+	bytes, err := good.MarshalMsg(nil)
+	require.NoError(f, err)
+	require.NotEmpty(f, bytes)
+
+	// Add the seed corpus
+	f.Add(bytes)
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		var got Message
+		n, err := got.UnmarshalMsg(data)
+
+		if err == nil {
+			require.Equal(t, good, got)
+		} else {
+			require.Zero(t, n)
+			require.Error(t, err)
+		}
+	})
+}
+*/

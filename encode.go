@@ -11,12 +11,10 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jws"
-	"github.com/xmidt-org/securly/hash"
 )
 
 type encoder struct {
 	doNotSign         bool
-	shaAlg            *hash.SHA
 	leaf              *x509.Certificate
 	intermediates     []*x509.Certificate
 	signAlg           jwa.SignatureAlgorithm
@@ -27,16 +25,7 @@ type encoder struct {
 func newEncoder(opts ...EncodeOption) (*encoder, error) {
 	enc := encoder{}
 
-	defaults := []EncodeOption{
-		WithHash(hash.SHA256),
-	}
-
-	vadors := []EncodeOption{
-		validateSigAlg(),
-	}
-
-	opts = append(defaults, opts...)
-	opts = append(opts, vadors...)
+	opts = append(opts, validateSigAlg())
 
 	for _, opt := range opts {
 		if opt != nil {

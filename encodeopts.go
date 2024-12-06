@@ -9,28 +9,11 @@ import (
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/xmidt-org/securly/hash"
 )
 
 // EncodeOption is a functional option for the Instructions constructor.
 type EncodeOption interface {
 	apply(*encoder) error
-}
-
-// WithHash sets the SHA algorithm used for files in the Message.
-func WithHash(alg hash.SHA) EncodeOption {
-	return shaOption{
-		alg: alg,
-	}
-}
-
-type shaOption struct {
-	alg hash.SHA
-}
-
-func (s shaOption) apply(enc *encoder) error {
-	enc.shaAlg = &s.alg
-	return nil
 }
 
 // SignWith sets the signing algorithm, public key, and private key used to sign
