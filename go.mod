@@ -5,7 +5,7 @@ go 1.23.1
 require (
 	github.com/lestrrat-go/jwx/v2 v2.1.3
 	github.com/stretchr/testify v1.10.0
-	github.com/tinylib/msgp v1.2.4
+	github.com/tinylib/msgp v1.2.5
 )
 
 require (
