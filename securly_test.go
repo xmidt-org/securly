@@ -39,7 +39,7 @@ func TestSafeInTheClear(t *testing.T) {
 			name: "asymmetric key",
 			encryption: &Encryption{
 				Alg: jwa.RSA_OAEP,
-				Key: mustFromRaw(chainA.leaf.PublicKey),
+				Key: mustFromRaw(chainA.Leaf().Public.PublicKey),
 			},
 		},
 	}
@@ -85,7 +85,7 @@ func TestVerify(t *testing.T) {
 			name: "invalid JWK key",
 			encryption: &Encryption{
 				Alg: jwa.RSA_OAEP, // They key is an EC key, generating an error.
-				Key: mustFromRaw(chainA.leaf.PublicKey),
+				Key: mustFromRaw(chainA.Leaf().Public.PublicKey),
 			},
 			expectedErr: ErrInvalidEncryptionAlg,
 		},
@@ -121,7 +121,7 @@ func TestMarshalErrors(t *testing.T) {
 		},
 		Response: &Encryption{
 			Alg: jwa.DIRECT,
-			Key: mustFromRaw(chainA.leaf.PublicKey),
+			Key: mustFromRaw(chainA.Leaf().Public.PublicKey),
 		},
 	}
 

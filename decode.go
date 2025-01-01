@@ -4,13 +4,9 @@
 package securly
 
 import (
-	"crypto/x509"
-	"encoding/base64"
-	"fmt"
-
-	"github.com/lestrrat-go/jwx/v2/cert"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jws"
+	"github.com/xmidt-org/keychainjwt"
 )
 
 // Decode converts a slice of bytes into a *Message if possible.  Depending on
@@ -32,8 +28,8 @@ func Decode(buf []byte, opts ...DecoderOption) (*Message, error) {
 // decoder contains the configuration for decoding a set of messages.
 type decoder struct {
 	noVerification bool
-	trustedRootCAs []*x509.Certificate
-	policies       []string
+	opts           []keychainjwt.Option
+	trusted        *keychainjwt.Trust
 }
 
 // newDecoder converts a slice of bytes plus options into a Message.
@@ -41,6 +37,7 @@ func newDecoder(opts ...DecoderOption) (*decoder, error) {
 	var p decoder
 
 	vadors := []DecoderOption{
+		createTrust(),
 		validateRoots(),
 	}
 
@@ -63,19 +60,26 @@ func (p *decoder) decode(buf []byte) (*Message, error) {
 		return nil, err
 	}
 
+	var payload []byte
+
 	// Verify the JWS signature if possible.
-	if !p.noVerification {
-		if err = validateSignature(JWS, p.trustedRootCAs, p.policies); err != nil {
+	if p.noVerification {
+		trusted, err := jws.Parse(JWS, jws.WithCompact())
+		if err != nil {
+			return nil, err
+		}
+		payload = trusted.Payload()
+	} else {
+		alg, key, err := p.trusted.GetKey(JWS)
+		if err != nil {
+			return nil, err
+		}
+
+		payload, err = jws.Verify(JWS, jws.WithKey(jwa.SignatureAlgorithm(alg), key))
+		if err != nil {
 			return nil, err
 		}
 	}
-
-	trusted, err := jws.Parse(JWS, jws.WithCompact())
-	if err != nil {
-		return nil, err
-	}
-
-	payload := trusted.Payload()
 
 	// Unmarshal the inner payload
 	var msg Message
@@ -90,58 +94,4 @@ func (p *decoder) decode(buf []byte) (*Message, error) {
 	}
 
 	return &msg, nil
-}
-
-func validateSignature(JWS []byte, roots []*x509.Certificate, policies []string) error {
-	untrusted, err := jws.Parse(JWS, jws.WithCompact())
-	if err != nil {
-		return err
-	}
-
-	sigs := untrusted.Signatures()
-	if len(sigs) != 1 {
-		return fmt.Errorf("expecting exactly one signer, got %d", len(sigs))
-	}
-
-	signer := sigs[0]
-	headers := signer.ProtectedHeaders()
-
-	// Get the algorithm
-	alg, ok := headers.Get("alg")
-	if !ok {
-		return fmt.Errorf("alg header is missing")
-	}
-
-	// Get the x5c header
-	chain, ok := headers.Get("x5c")
-	if !ok || chain == nil {
-		return fmt.Errorf("x5c header is missing or invalid")
-	}
-
-	// Validate the cert chain and get the leaf node.
-	leaf, err := validateCertChain(roots, chain.(*cert.Chain), policies)
-	if err != nil {
-		return err
-	}
-
-	// Decode the first certificate in the x5c header
-	certData, err := base64.URLEncoding.DecodeString(leaf)
-	if err != nil {
-		return fmt.Errorf("failed to decode x5c certificate: %w", err)
-	}
-
-	// Parse the certificate to get the public key
-	cert, err := x509.ParseCertificate(certData)
-	if err != nil {
-		return fmt.Errorf("failed to parse x5c certificate: %w", err)
-	}
-
-	key := jws.WithKey(alg.(jwa.KeyAlgorithm), cert.PublicKey).(jws.VerifyOption)
-
-	_, err = jws.Verify(JWS, key)
-	if err != nil {
-		return fmt.Errorf("failed to verify JWS: %w", err)
-	}
-
-	return nil
 }

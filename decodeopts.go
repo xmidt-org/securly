@@ -6,6 +6,8 @@ package securly
 import (
 	"crypto/x509"
 	"fmt"
+
+	"github.com/xmidt-org/keychainjwt"
 )
 
 // Option is a functional option for the Instructions constructor.
@@ -25,7 +27,7 @@ type trustRootCAOption struct {
 }
 
 func (t trustRootCAOption) apply(p *decoder) error {
-	p.trustedRootCAs = append(p.trustedRootCAs, t.certs...)
+	p.opts = append(p.opts, keychainjwt.TrustedRoots(t.certs...))
 	return nil
 }
 
@@ -42,7 +44,7 @@ type requirePoliciesOption struct {
 }
 
 func (r requirePoliciesOption) apply(p *decoder) error {
-	p.policies = append(p.policies, r.policies...)
+	p.opts = append(p.opts, keychainjwt.RequirePolicies(r.policies...))
 	return nil
 }
 
@@ -60,7 +62,20 @@ func (withoutVerificationOption) apply(p *decoder) error {
 	return nil
 }
 
-//------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
+func createTrust() DecoderOption {
+	return createTrustOption{}
+}
+
+type createTrustOption struct{}
+
+func (c createTrustOption) apply(p *decoder) error {
+	trusted, err := keychainjwt.New(p.opts...)
+	if err == nil {
+		p.trusted = trusted
+	}
+	return err
+}
 
 func validateRoots() DecoderOption {
 	return validateRootsOption{}
@@ -69,9 +84,9 @@ func validateRoots() DecoderOption {
 type validateRootsOption struct{}
 
 func (v validateRootsOption) apply(p *decoder) error {
-	if len(p.trustedRootCAs) == 0 && !p.noVerification {
-		return fmt.Errorf("no trusted root CAs provided")
+	if p.noVerification || len(p.trusted.Roots()) > 0 {
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("no trusted root CAs provided")
 }

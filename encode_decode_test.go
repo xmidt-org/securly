@@ -25,13 +25,13 @@ type encodeDecodeTest struct {
 var simpleWorking = encodeDecodeTest{
 	desc: "simple, working",
 	encOpts: []SignOption{
-		SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
+		SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
 	},
 	input: Message{
 		Payload: []byte("Hello, world."),
 	},
 	decOpts: []DecoderOption{
-		TrustRootCAs(chainA.root),
+		TrustRootCAs(chainA.Root().Public),
 		RequirePolicies("1.2.100"),
 	},
 }
@@ -39,7 +39,7 @@ var simpleWorking = encodeDecodeTest{
 var complexWorking = encodeDecodeTest{
 	desc: "complex, working",
 	encOpts: []SignOption{
-		SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
+		SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
 	},
 	input: Message{
 		Payload: []byte("Hello, world."),
@@ -53,11 +53,11 @@ var complexWorking = encodeDecodeTest{
 		},
 		Response: &Encryption{
 			Alg: jwa.ECDH_ES,
-			Key: mustFromRaw(chainA.leaf.PublicKey),
+			Key: mustFromRaw(chainA.Leaf().Public.PublicKey),
 		},
 	},
 	decOpts: []DecoderOption{
-		TrustRootCAs(chainA.root),
+		TrustRootCAs(chainA.Root().Public),
 		RequirePolicies("1.2.100"),
 	},
 }
@@ -79,7 +79,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "Signature with NoVerification(), working",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -96,7 +96,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 			Payload: []byte("Hello, world."),
 		},
 		decOpts: []DecoderOption{
-			TrustRootCAs(chainA.root),
+			TrustRootCAs(chainA.Root().Public),
 		},
 		decErr: errUnknown,
 	}, {
@@ -112,7 +112,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 		desc: "Try setting multiple signing algorithms, should fail",
 		encOpts: []SignOption{
 			NoSignature(),
-			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -121,7 +121,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "invalid response encryption algorithm",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -134,7 +134,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "unsafe response encryption algorithm	in the clear is not allowed",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -147,7 +147,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "invalid response encryption key/alg combination",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.leaf, chainA.leafKey, chainA.chain...),
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -160,13 +160,13 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "untrusted chain",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainB.leaf, chainB.leafKey, chainB.chain...),
+			SignWithRaw(jwa.ES256, chainB.Leaf().Public, chainB.Leaf().Private, chainB.Included()...),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
 		},
 		decOpts: []DecoderOption{
-			TrustRootCAs(chainA.root),
+			TrustRootCAs(chainA.Root().Public),
 		},
 		decErr: errUnknown,
 	},

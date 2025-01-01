@@ -25,13 +25,13 @@ type encryptDecryptTest struct {
 var encryptExternalKey = encryptDecryptTest{
 	desc: "simple, working with external key",
 	encOpts: []EncryptOption{
-		EncryptWithRaw(jwa.ECDH_ES, chainA.leaf.PublicKey),
+		EncryptWithRaw(jwa.ECDH_ES, chainA.Leaf().Public.PublicKey),
 	},
 	input: Message{
 		Payload: []byte("Hello, world."),
 	},
 	decOpts: []DecryptOption{
-		DecryptWithRaw(chainA.leafKey),
+		DecryptWithRaw(chainA.Leaf().Private),
 	},
 }
 
@@ -39,10 +39,10 @@ var encryptResponseKey = encryptDecryptTest{
 	desc: "simple, working with response key",
 	input: Message{
 		Payload:  []byte("Hello, world."),
-		Response: mustGenerateResponse(jwa.ECDH_ES, chainA.leaf),
+		Response: mustGenerateResponse(jwa.ECDH_ES, chainA.Leaf().Public),
 	},
 	decOpts: []DecryptOption{
-		DecryptWithRaw(chainA.leafKey),
+		DecryptWithRaw(chainA.Leaf().Private),
 	},
 	output: &Message{
 		Payload: []byte("Hello, world."),
@@ -55,14 +55,14 @@ var encryptDecryptTests = []encryptDecryptTest{
 	{
 		desc: "simple, working with a present but empty response key",
 		encOpts: []EncryptOption{
-			EncryptWithRaw(jwa.ECDH_ES, chainA.leaf.PublicKey),
+			EncryptWithRaw(jwa.ECDH_ES, chainA.Leaf().Public.PublicKey),
 		},
 		input: Message{
 			Payload:  []byte("Hello, world."),
 			Response: &Encryption{},
 		},
 		decOpts: []DecryptOption{
-			DecryptWithRaw(chainA.leafKey),
+			DecryptWithRaw(chainA.Leaf().Private),
 		},
 		output: &Message{
 			Payload: []byte("Hello, world."),
@@ -83,7 +83,7 @@ var encryptDecryptTests = []encryptDecryptTest{
 		desc: "invalid decryption key",
 		input: Message{
 			Payload:  []byte("Hello, world."),
-			Response: mustGenerateResponse(jwa.ECDH_ES, chainA.leaf),
+			Response: mustGenerateResponse(jwa.ECDH_ES, chainA.Leaf().Public),
 		},
 		decOpts: []DecryptOption{
 			DecryptWith(nil),
@@ -95,7 +95,7 @@ var encryptDecryptTests = []encryptDecryptTest{
 			Payload: []byte("Hello, world."),
 			Response: &Encryption{
 				Alg: jwa.DIRECT,
-				Key: mustFromRaw(chainA.leaf.PublicKey),
+				Key: mustFromRaw(chainA.Leaf().Public.PublicKey),
 			},
 		},
 		encErr: errUnknown,
@@ -104,11 +104,11 @@ var encryptDecryptTests = []encryptDecryptTest{
 		input: Message{
 			Payload: []byte("Hello, world."),
 			Response: &Encryption{
-				Key: mustFromRaw(chainA.leaf.PublicKey),
+				Key: mustFromRaw(chainA.Leaf().Public.PublicKey),
 			},
 		},
 		decOpts: []DecryptOption{
-			DecryptWithRaw(chainA.leafKey),
+			DecryptWithRaw(chainA.Leaf().Private),
 		},
 		output: &Message{
 			Payload: []byte("Hello, world."),
