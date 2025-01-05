@@ -4,8 +4,11 @@
 package securly
 
 import (
+	"context"
+	"crypto/x509"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/stretchr/testify/assert"
@@ -59,6 +62,12 @@ var complexWorking = encodeDecodeTest{
 	decOpts: []DecoderOption{
 		TrustRootCAs(chainA.Root().Public),
 		RequirePolicies("1.2.100"),
+		Require(
+			// Show this verifier is called and works.
+			VerifierFunc(
+				func(_ context.Context, _ []*x509.Certificate, _ time.Time) error {
+					return nil
+				})),
 	},
 }
 
@@ -66,6 +75,33 @@ var encodeDecodeTests = []encodeDecodeTest{
 	simpleWorking,
 	complexWorking,
 	{
+		desc: "No trusted roots",
+		encOpts: []SignOption{
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+		},
+		input: Message{
+			Payload: []byte("Hello, world."),
+		},
+		decErr: errUnknown,
+	}, {
+		desc: "Require() not met",
+		encOpts: []SignOption{
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+		},
+		input: Message{
+			Payload: []byte("Hello, world."),
+		},
+		decOpts: []DecoderOption{
+			TrustRootCAs(chainA.Root().Public),
+			RequirePolicies("1.2.100"),
+			Require(
+				VerifierFunc(
+					func(_ context.Context, _ []*x509.Certificate, _ time.Time) error {
+						return errors.New("custom verifier failed")
+					})),
+		},
+		decErr: errUnknown,
+	}, {
 		desc: "NoSignature()/NoVerification(), working",
 		encOpts: []SignOption{
 			NoSignature(),

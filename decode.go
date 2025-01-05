@@ -4,9 +4,8 @@
 package securly
 
 import (
-	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jws"
-	"github.com/xmidt-org/keychainjwt"
+	"github.com/xmidt-org/jwskeychain"
 )
 
 // Decode converts a slice of bytes into a *Message if possible.  Depending on
@@ -28,8 +27,8 @@ func Decode(buf []byte, opts ...DecoderOption) (*Message, error) {
 // decoder contains the configuration for decoding a set of messages.
 type decoder struct {
 	noVerification bool
-	opts           []keychainjwt.Option
-	trusted        *keychainjwt.Trust
+	opts           []jwskeychain.Option
+	provider       *jwskeychain.Provider
 }
 
 // newDecoder converts a slice of bytes plus options into a Message.
@@ -64,21 +63,15 @@ func (p *decoder) decode(buf []byte) (*Message, error) {
 
 	// Verify the JWS signature if possible.
 	if p.noVerification {
-		trusted, err := jws.Parse(JWS, jws.WithCompact())
-		if err != nil {
-			return nil, err
+		var trusted *jws.Message
+		if trusted, err = jws.Parse(JWS, jws.WithCompact()); err == nil {
+			payload = trusted.Payload()
 		}
-		payload = trusted.Payload()
 	} else {
-		alg, key, err := p.trusted.GetKey(JWS)
-		if err != nil {
-			return nil, err
-		}
-
-		payload, err = jws.Verify(JWS, jws.WithKey(jwa.SignatureAlgorithm(alg), key))
-		if err != nil {
-			return nil, err
-		}
+		payload, err = jws.Verify(JWS, jws.WithKeyProvider(p.provider))
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// Unmarshal the inner payload

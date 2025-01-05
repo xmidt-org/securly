@@ -9,7 +9,7 @@ import (
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/xmidt-org/keychainjwt/keychaintest"
+	"github.com/xmidt-org/jwskeychain/keychaintest"
 )
 
 var errUnknown = fmt.Errorf("unknown error")
