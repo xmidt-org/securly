@@ -8,123 +8,75 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v2/jws"
+	"github.com/xmidt-org/jwskeychain"
 )
 
 // SignOption is a functional option for the Instructions constructor.
 type SignOption interface {
-	apply(*encoder) error
+	apply(*Signer) error
 }
 
-// SignWith sets the signing algorithm, public key, and private key used to sign
-// the Message, as well as any intermediaries.
-//
-// The following combinations are valid (the public/private keys must match):
-// - ES256, private: *ecdsa.PrivateKey
-// - ES384, private: *ecdsa.PrivateKey
-// - ES512, private: *ecdsa.PrivateKey
-// - RS256, private: *rsa.PrivateKey
-// - RS384, private: *rsa.PrivateKey
-// - RS512, private: *rsa.PrivateKey
-// - PS256, private: *rsa.PrivateKey
-// - PS384, private: *rsa.PrivateKey
-// - PS512, private: *rsa.PrivateKey
-// - EdDSA, private: ed25519.PrivateKey
-//
-// Unfortunately, to make this work the private type needs to be an interface{}.
-func SignWith(alg jwa.SignatureAlgorithm,
-	public *x509.Certificate, private jwk.Key,
-	intermediates ...*x509.Certificate,
-) SignOption {
-	return signAlgOption{
-		alg:           alg,
-		public:        public,
-		key:           private,
-		intermediates: intermediates,
-	}
+type errSignOptionFunc func(*Signer) error
+
+func (f errSignOptionFunc) apply(enc *Signer) error {
+	return f(enc)
 }
 
-func SignWithRaw(alg jwa.SignatureAlgorithm,
-	public *x509.Certificate, private any,
-	intermediates ...*x509.Certificate,
-) SignOption {
-	key, err := jwk.FromRaw(private)
-	if err != nil {
-		return errorSign(err)
-	}
-
-	return SignWith(alg, public, key, intermediates...)
+func signOptionFunc(f func(*Signer)) SignOption {
+	return errSignOptionFunc(func(enc *Signer) error {
+		f(enc)
+		return nil
+	})
 }
 
-type signAlgOption struct {
-	alg           jwa.SignatureAlgorithm
-	public        *x509.Certificate
-	key           jwk.Key
-	intermediates []*x509.Certificate
+// SignWithX509Chain sets the signing algorithm, public key, and private key
+// used to sign the Message, as well as any intermediaries.  See
+// [jwskeychain.Signer] for more details.
+func SignWithX509Chain(alg jwa.SignatureAlgorithm, private any, certs []*x509.Certificate) SignOption {
+	return errSignOptionFunc(func(enc *Signer) error {
+		key, err := jwskeychain.Signer(alg, private, certs)
+		if err != nil {
+			return err
+		}
+
+		enc.key = key
+		return nil
+	})
 }
 
-func (s signAlgOption) apply(enc *encoder) error {
-	if s.alg.IsSymmetric() || s.alg == jwa.NoSignature {
-		return ErrInvalidSignAlg
-	}
-
-	enc.signAlg = s.alg
-	enc.leaf = s.public
-	enc.key = s.key
-	enc.intermediates = s.intermediates
-	return nil
+// SignWithKey creates a signing key for the Message.  See [jws.WithKey] for more
+// details about how to use this option.
+func SignWithKey(alg jwa.SignatureAlgorithm, key any, opts ...jws.WithKeySuboption) SignOption {
+	return signOptionFunc(func(enc *Signer) {
+		enc.key = jws.WithKey(alg, key, opts...)
+	})
 }
 
 // NoSignature indicates that the Message should not be signed.  It cannot be used
 // with any SignWith options or an error will be returned.  This is to ensure that
 // the caller is aware that the Message will not be signed.
 func NoSignature() SignOption {
-	return noSignatureOption{}
-}
-
-type noSignatureOption struct{}
-
-func (n noSignatureOption) apply(enc *encoder) error {
-	enc.doNotSign = true
-	return nil
+	return signOptionFunc(func(enc *Signer) {
+		enc.doNotSign = true
+	})
 }
 
 //------------------------------------------------------------------------------
 
-func errorSign(err error) SignOption {
-	return errorSignOption{
-		err: err,
-	}
-}
-
-type errorSignOption struct {
-	err error
-}
-
-func (e errorSignOption) apply(*encoder) error {
-	return e.err
-}
-
 func validateSigAlg() SignOption {
-	return validateSigAlgOption{}
-}
-
-type validateSigAlgOption struct{}
-
-func (v validateSigAlgOption) apply(enc *encoder) error {
-	if enc.doNotSign {
-		if enc.signAlg != "" ||
-			enc.leaf != nil ||
-			enc.key != nil ||
-			len(enc.intermediates) > 0 {
-			return fmt.Errorf("%w: NoSignature() must be used in isolation", ErrInvalidSignAlg)
+	return errSignOptionFunc(func(enc *Signer) error {
+		if enc.doNotSign {
+			if enc.key != nil {
+				return fmt.Errorf("%w: NoSignature() must be used in isolation", ErrInvalidSignAlg)
+			}
+			return nil
 		}
+
+		if enc.key == nil {
+			return fmt.Errorf("%w: key is required", ErrInvalidSignAlg)
+		}
+
 		return nil
-	}
-
-	if enc.signAlg == "" || enc.key == nil {
-		return fmt.Errorf("%w: algorithm and key are required", ErrInvalidSignAlg)
-	}
-
-	return nil
+	})
 }

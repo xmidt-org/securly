@@ -5,7 +5,6 @@ package securly
 
 import (
 	"github.com/lestrrat-go/jwx/v2/jws"
-	"github.com/xmidt-org/jwskeychain"
 )
 
 // Decode converts a slice of bytes into a *Message if possible.  Depending on
@@ -16,27 +15,25 @@ import (
 // message.  If you want to skip this verification, you can pass the
 // NoVerification() option.
 func Decode(buf []byte, opts ...DecoderOption) (*Message, error) {
-	p, err := newDecoder(opts...)
+	p, err := NewDecoder(opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	return p.decode(buf)
+	return p.Decode(buf)
 }
 
-// decoder contains the configuration for decoding a set of messages.
-type decoder struct {
+// Decoder contains the configuration for decoding a set of messages.
+type Decoder struct {
 	noVerification bool
-	opts           []jwskeychain.Option
-	provider       *jwskeychain.Provider
+	verifyOpts     []jws.VerifyOption
 }
 
-// newDecoder converts a slice of bytes plus options into a Message.
-func newDecoder(opts ...DecoderOption) (*decoder, error) {
-	var p decoder
+// NewDecoder converts a slice of bytes plus options into a Message.
+func NewDecoder(opts ...DecoderOption) (*Decoder, error) {
+	var p Decoder
 
 	vadors := []DecoderOption{
-		createTrust(),
 		validateRoots(),
 	}
 
@@ -52,8 +49,8 @@ func newDecoder(opts ...DecoderOption) (*decoder, error) {
 	return &p, nil
 }
 
-// decode converts a slice of bytes into a *Message if possible.
-func (p *decoder) decode(buf []byte) (*Message, error) {
+// Decode converts a slice of bytes into a *Message if possible.
+func (p *Decoder) Decode(buf []byte) (*Message, error) {
 	JWS, err := decompress(buf)
 	if err != nil {
 		return nil, err
@@ -68,7 +65,7 @@ func (p *decoder) decode(buf []byte) (*Message, error) {
 			payload = trusted.Payload()
 		}
 	} else {
-		payload, err = jws.Verify(JWS, jws.WithKeyProvider(p.provider))
+		payload, err = jws.Verify(JWS, p.verifyOpts...)
 	}
 	if err != nil {
 		return nil, err
