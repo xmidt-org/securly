@@ -4,94 +4,81 @@
 package securly
 
 import (
-	"context"
-	"crypto/x509"
 	"fmt"
-	"time"
 
-	"github.com/xmidt-org/jwskeychain"
+	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v2/jws"
 )
 
 // Option is a functional option for the Instructions constructor.
 type DecoderOption interface {
-	apply(*decoder) error
+	apply(*Decoder) error
 }
 
-type decoderOptionFunc func(*decoder) error
+type errDecoderOptionFunc func(*Decoder) error
 
-func (f decoderOptionFunc) apply(p *decoder) error {
+func (f errDecoderOptionFunc) apply(p *Decoder) error {
 	return f(p)
 }
 
-// TrustRootCAs specifies a list of root CAs to trust when verifying the signature.
-func TrustRootCAs(certs ...*x509.Certificate) DecoderOption {
-	return decoderOptionFunc(func(p *decoder) error {
-		p.opts = append(p.opts, jwskeychain.TrustedRoots(certs...))
+func decoderOptionFunc(f func(*Decoder)) DecoderOption {
+	return errDecoderOptionFunc(func(p *Decoder) error {
+		f(p)
 		return nil
 	})
 }
 
-// RequirePolicies specifies a list of policies that must be present in the
-// signing chain intermediates.
-func RequirePolicies(policies ...string) DecoderOption {
-	return decoderOptionFunc(func(p *decoder) error {
-		p.opts = append(p.opts, jwskeychain.RequirePolicies(policies...))
-		return nil
+func verifyOptionFunc(opt jws.VerifyOption) DecoderOption {
+	return decoderOptionFunc(func(p *Decoder) {
+		if opt != nil {
+			p.verifyOpts = append(p.verifyOpts, opt)
+		}
 	})
 }
 
-// Verifier is an interface that defines a function to verify a certificate chain.
-type Verifier interface {
-	Verify(ctx context.Context, chain []*x509.Certificate, now time.Time) error
+// WithKeyProvider enables using a jws.KeyProvider.  See [jws.WithKeyProvider]
+// for more details.
+//
+// It is likely you will want to use this option with [jwskeychain.Provider]
+// package.
+func WithKeyProvider(provider jws.KeyProvider) DecoderOption {
+	return verifyOptionFunc(jws.WithKeyProvider(provider))
 }
 
-// VerifierFunc is a function type that implements the Verifier interface.
-type VerifierFunc func(ctx context.Context, chain []*x509.Certificate, now time.Time) error
-
-func (vf VerifierFunc) Verify(ctx context.Context, chain []*x509.Certificate, now time.Time) error {
-	return vf(ctx, chain, now)
+// WithKeySet enables using a jwk.Set. See [jws.WithKeySet] for more details.
+func WithKeySet(set jwk.Set, options ...jws.WithKeySetSuboption) DecoderOption {
+	return verifyOptionFunc(jws.WithKeySet(set, options...))
 }
 
-// _ is a compile-time assertion that VerifierFunc implements the Verifier interface.
-var _ jwskeychain.Verifier = VerifierFunc(nil)
+// WithKeyUsed enables using the [jws.WithKeyUsed] option.  See [jws.WithKeyUsed]
+// for more details.
+func WithKeyUsed(v any) DecoderOption {
+	return verifyOptionFunc(jws.WithKeyUsed(v))
+}
 
-// Require provides a way to provide a custom verifier for the certificate chain.
-func Require(v Verifier) DecoderOption {
-	return decoderOptionFunc(func(p *decoder) error {
-		p.opts = append(p.opts, jwskeychain.Require(v))
-		return nil
-	})
+// WithVerifyAuto enables using the [jws.WithVerifyAuto] option.  See
+// [jws.WithVeriftyAuto] for more details.
+func WithVerifyAuto(f jwk.Fetcher, options ...jwk.FetchOption) DecoderOption {
+	return verifyOptionFunc(jws.WithVerifyAuto(f, options...))
 }
 
 // NoVerification does not verify the signature or credentials, but decodes
 // the Message.  Generally this is only useful if testing.  DO NOT use this in
 // production.  This will intentionally conflict with the TrustedRootCA() option.
 func NoVerification() DecoderOption {
-	return decoderOptionFunc(func(p *decoder) error {
+	return decoderOptionFunc(func(p *Decoder) {
 		p.noVerification = true
-		return nil
 	})
 }
 
 // ------------------------------------------------------------------------------
 
-func createTrust() DecoderOption {
-	return decoderOptionFunc(func(p *decoder) error {
-		trusted, err := jwskeychain.New(p.opts...)
-		if err != nil {
-			return err
-		}
-		p.provider = trusted
-		return nil
-	})
-}
-
 func validateRoots() DecoderOption {
-	return decoderOptionFunc(func(p *decoder) error {
-		if p.noVerification || len(p.provider.Roots()) > 0 {
+	return errDecoderOptionFunc(func(p *Decoder) error {
+		if p.noVerification || len(p.verifyOpts) > 0 {
 			return nil
 		}
 
-		return fmt.Errorf("no trusted root CAs provided")
+		return fmt.Errorf("no valid sources of trust")
 	})
 }

@@ -130,12 +130,12 @@ func (m Message) Encode() (data []byte, isEncrypted bool, err error) {
 // Sign converts a Message into a slice of bytes and signs it using the
 // provided options.
 func (m Message) Sign(opts ...SignOption) ([]byte, error) {
-	enc, err := newEncoder(opts...)
+	enc, err := NewSigner(opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	return enc.encode(m)
+	return enc.Encode(m)
 }
 
 // Encrypt encrypts the message using the provided options.

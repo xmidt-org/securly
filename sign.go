@@ -4,26 +4,19 @@
 package securly
 
 import (
-	"crypto/x509"
-	"encoding/base64"
-
-	"github.com/lestrrat-go/jwx/v2/cert"
-	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jws"
 )
 
-type encoder struct {
+// Signer is a type that can encode & sign a Message.
+type Signer struct {
 	doNotSign         bool
-	leaf              *x509.Certificate
-	intermediates     []*x509.Certificate
-	signAlg           jwa.SignatureAlgorithm
-	key               jwk.Key
+	key               jws.SignVerifyOption
 	skipResponseCheck bool
 }
 
-func newEncoder(opts ...SignOption) (*encoder, error) {
-	enc := encoder{}
+// NewSigner creates a new Signer with the given options.
+func NewSigner(opts ...SignOption) (*Signer, error) {
+	enc := Signer{}
 
 	opts = append(opts, validateSigAlg())
 
@@ -39,7 +32,8 @@ func newEncoder(opts ...SignOption) (*encoder, error) {
 	return &enc, nil
 }
 
-func (enc *encoder) encode(m Message) ([]byte, error) {
+// Encode encodes the given Message and signs it.
+func (enc *Signer) Encode(m Message) ([]byte, error) {
 	if err := m.Response.safeInTheClear(); err != nil {
 		return nil, err
 	}
@@ -62,26 +56,8 @@ func (enc *encoder) encode(m Message) ([]byte, error) {
 			return nil, err
 		}
 	} else {
-		// Build certificate chain.
-		var chain cert.Chain
-		for _, cert := range append([]*x509.Certificate{enc.leaf}, enc.intermediates...) {
-			err = chain.AddString(base64.URLEncoding.EncodeToString(cert.Raw))
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		// Create headers and set x5c with certificate chain.
-		headers := jws.NewHeaders()
-		err = headers.Set(jws.X509CertChainKey, &chain)
-		if err != nil {
-			return nil, err
-		}
-
-		key := jws.WithKey(enc.signAlg, enc.key, jws.WithProtectedHeaders(headers))
-
 		// Sign the inner payload with the private key.
-		signed, err = jws.Sign(data, key)
+		signed, err = jws.Sign(data, enc.key)
 		if err != nil {
 			return nil, err
 		}

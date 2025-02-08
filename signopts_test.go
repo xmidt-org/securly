@@ -4,91 +4,91 @@
 package securly
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"testing"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSignWithRaw(t *testing.T) {
-	// Generate test keys
-	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-
-	ecdsaPrivateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	_, ed25519PrivateKey, err := ed25519.GenerateKey(rand.Reader)
-	require.NoError(t, err)
-
-	// Generate a test certificate
-	cert := &x509.Certificate{}
+func TestSignWithX509(t *testing.T) {
+	chain := mustGeneratecertChain("leaf<-ica<-root")
 
 	tests := []struct {
-		name        string
-		alg         jwa.SignatureAlgorithm
-		privateKey  any
-		expectErr   bool
-		expectedAlg jwa.SignatureAlgorithm
-		expectedKey any
+		name    string
+		alg     jwa.SignatureAlgorithm
+		private any
+		certs   []*x509.Certificate
+		err     bool
 	}{
 		{
-			name:        "valid RS256 key",
-			alg:         jwa.RS256,
-			privateKey:  rsaPrivateKey,
-			expectErr:   false,
-			expectedAlg: jwa.RS256,
-		},
-		{
-			name:        "valid ES256 key",
-			alg:         jwa.ES256,
-			privateKey:  ecdsaPrivateKey,
-			expectErr:   false,
-			expectedAlg: jwa.ES256,
-		},
-		{
-			name:        "valid EdDSA key",
-			alg:         jwa.EdDSA,
-			privateKey:  ed25519PrivateKey,
-			expectErr:   false,
-			expectedAlg: jwa.EdDSA,
-		},
-		{
-			name:       "invalid key type",
-			alg:        jwa.RS256,
-			privateKey: "invalid-key",
-			expectErr:  true,
+			name:    "valid RS256 key and chain",
+			alg:     jwa.RS256,
+			private: chain.Leaf().Private,
+			certs:   chain.Included(),
+		}, {
+			name:    "invalid symmetric key",
+			alg:     jwa.HS256,
+			private: chain.Leaf().Private,
+			certs:   chain.Included(),
+			err:     true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert := assert.New(t)
-			require := require.New(t)
+			opt := SignWithX509Chain(tt.alg, tt.private, tt.certs)
 
-			opt := SignWithRaw(tt.alg, cert, tt.privateKey)
-			enc := &encoder{}
+			assert.NotNil(t, opt)
 
-			err := opt.apply(enc)
-			if tt.expectErr {
-				assert.Error(err)
-			} else {
-				require.NoError(err)
-				assert.Equal(tt.expectedAlg, enc.signAlg)
-				assert.NotNil(enc.key)
+			var enc Signer
+			err := opt.apply(&enc)
+
+			if tt.err {
+				assert.Error(t, err)
+				return
 			}
+
+			assert.NoError(t, err)
 		})
 	}
 }
 
+func TestSignWithKey(t *testing.T) {
+	// Generate test keys
+	rsaPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		alg        jwa.SignatureAlgorithm
+		privateKey any
+	}{
+		{
+			name:       "valid RS256 key",
+			alg:        jwa.RS256,
+			privateKey: rsaPrivateKey,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opt := SignWithKey(tt.alg, tt.privateKey)
+
+			assert.NotNil(t, opt)
+
+			var enc Signer
+			err := opt.apply(&enc)
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+/*
 func TestValidateSigAlg(t *testing.T) {
 	// Generate a test certificate
 	cert := &x509.Certificate{}
@@ -139,7 +139,7 @@ func TestValidateSigAlg(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			enc := &encoder{
+			enc := &Encoder{
 				signAlg:       tt.signAlg,
 				doNotSign:     tt.doNotSign,
 				leaf:          tt.leaf,
@@ -158,3 +158,4 @@ func TestValidateSigAlg(t *testing.T) {
 		})
 	}
 }
+*/

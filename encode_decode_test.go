@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jws"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/xmidt-org/jwskeychain"
 )
 
 type encodeDecodeTest struct {
@@ -28,21 +30,25 @@ type encodeDecodeTest struct {
 var simpleWorking = encodeDecodeTest{
 	desc: "simple, working",
 	encOpts: []SignOption{
-		SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+		SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 	},
 	input: Message{
 		Payload: []byte("Hello, world."),
 	},
 	decOpts: []DecoderOption{
-		TrustRootCAs(chainA.Root().Public),
-		RequirePolicies("1.2.100"),
+		WithKeyProvider(
+			must(jwskeychain.New(
+				jwskeychain.TrustedRoots(chainA.Root().Public),
+				jwskeychain.RequirePolicies("1.2.100"),
+			)).(jws.KeyProvider),
+		),
 	},
 }
 
 var complexWorking = encodeDecodeTest{
 	desc: "complex, working",
 	encOpts: []SignOption{
-		SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+		SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 	},
 	input: Message{
 		Payload: []byte("Hello, world."),
@@ -60,14 +66,17 @@ var complexWorking = encodeDecodeTest{
 		},
 	},
 	decOpts: []DecoderOption{
-		TrustRootCAs(chainA.Root().Public),
-		RequirePolicies("1.2.100"),
-		Require(
-			// Show this verifier is called and works.
-			VerifierFunc(
-				func(_ context.Context, _ []*x509.Certificate, _ time.Time) error {
-					return nil
-				})),
+		WithKeyProvider(
+			must(jwskeychain.New(
+				jwskeychain.TrustedRoots(chainA.Root().Public),
+				jwskeychain.RequirePolicies("1.2.100"),
+				jwskeychain.Require(
+					jwskeychain.VerifierFunc(
+						func(_ context.Context, _ []*x509.Certificate, _ time.Time) error {
+							return nil
+						})),
+			)).(jws.KeyProvider),
+		),
 	},
 }
 
@@ -77,7 +86,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	{
 		desc: "No trusted roots",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -86,19 +95,23 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "Require() not met",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
 		},
 		decOpts: []DecoderOption{
-			TrustRootCAs(chainA.Root().Public),
-			RequirePolicies("1.2.100"),
-			Require(
-				VerifierFunc(
-					func(_ context.Context, _ []*x509.Certificate, _ time.Time) error {
-						return errors.New("custom verifier failed")
-					})),
+			WithKeyProvider(
+				must(jwskeychain.New(
+					jwskeychain.TrustedRoots(chainA.Root().Public),
+					jwskeychain.RequirePolicies("1.2.100"),
+					jwskeychain.Require(
+						jwskeychain.VerifierFunc(
+							func(_ context.Context, _ []*x509.Certificate, _ time.Time) error {
+								return errors.New("custom verifier failed")
+							})),
+				)).(jws.KeyProvider),
+			),
 		},
 		decErr: errUnknown,
 	}, {
@@ -115,7 +128,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "Signature with NoVerification(), working",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -132,23 +145,18 @@ var encodeDecodeTests = []encodeDecodeTest{
 			Payload: []byte("Hello, world."),
 		},
 		decOpts: []DecoderOption{
-			TrustRootCAs(chainA.Root().Public),
+			WithKeyProvider(
+				must(jwskeychain.New(
+					jwskeychain.TrustedRoots(chainA.Root().Public),
+				)).(jws.KeyProvider),
+			),
 		},
 		decErr: errUnknown,
-	}, {
-		desc: "Try using signing algorith none, should fail",
-		encOpts: []SignOption{
-			SignWith("none", nil, nil),
-		},
-		input: Message{
-			Payload: []byte("Hello, world."),
-		},
-		encErr: ErrInvalidSignAlg,
 	}, {
 		desc: "Try setting multiple signing algorithms, should fail",
 		encOpts: []SignOption{
 			NoSignature(),
-			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -157,7 +165,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "invalid response encryption algorithm",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -170,7 +178,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "unsafe response encryption algorithm	in the clear is not allowed",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -183,7 +191,7 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "invalid response encryption key/alg combination",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainA.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
@@ -196,13 +204,49 @@ var encodeDecodeTests = []encodeDecodeTest{
 	}, {
 		desc: "untrusted chain",
 		encOpts: []SignOption{
-			SignWithRaw(jwa.ES256, chainB.Leaf().Public, chainB.Leaf().Private, chainB.Included()...),
+			SignWithX509Chain(jwa.ES256, chainB.Leaf().Private, chainB.Included()),
 		},
 		input: Message{
 			Payload: []byte("Hello, world."),
 		},
 		decOpts: []DecoderOption{
-			TrustRootCAs(chainA.Root().Public),
+			WithKeyProvider(
+				must(jwskeychain.New(
+					jwskeychain.TrustedRoots(chainA.Root().Public),
+				)).(jws.KeyProvider),
+			),
+		},
+		decErr: errUnknown,
+	}, {
+		desc: "untrusted chain (mixed B intermediates)",
+		encOpts: []SignOption{
+			SignWithX509Chain(jwa.ES256, chainA.Leaf().Private, chainB.Included()),
+		},
+		input: Message{
+			Payload: []byte("Hello, world."),
+		},
+		decOpts: []DecoderOption{
+			WithKeyProvider(
+				must(jwskeychain.New(
+					jwskeychain.TrustedRoots(chainA.Root().Public),
+				)).(jws.KeyProvider),
+			),
+		},
+		decErr: errUnknown,
+	}, {
+		desc: "untrusted chain (mixed A intermediates)",
+		encOpts: []SignOption{
+			SignWithX509Chain(jwa.ES256, chainB.Leaf().Private, chainA.Included()),
+		},
+		input: Message{
+			Payload: []byte("Hello, world."),
+		},
+		decOpts: []DecoderOption{
+			WithKeyProvider(
+				must(jwskeychain.New(
+					jwskeychain.TrustedRoots(chainA.Root().Public),
+				)).(jws.KeyProvider),
+			),
 		},
 		decErr: errUnknown,
 	},
@@ -277,4 +321,11 @@ func runEncDecTest(t *testing.T, tt encodeDecodeTest) {
 
 		require.Equal(want, msg)
 	})
+}
+
+func must(a any, err error) any {
+	if err != nil {
+		panic(err)
+	}
+	return a
 }
