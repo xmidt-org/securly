@@ -88,7 +88,10 @@ func createTrust() DecoderOption {
 
 func validateRoots() DecoderOption {
 	return decoderOptionFunc(func(p *decoder) error {
-		if p.noVerification || len(p.provider.Roots()) > 0 {
+		if p.noVerification && len(p.provider.Roots()) == 0 {
+			return nil
+		}
+		if !p.noVerification && len(p.provider.Roots()) > 0 {
 			return nil
 		}
 

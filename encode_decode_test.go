@@ -136,6 +136,30 @@ var encodeDecodeTests = []encodeDecodeTest{
 		},
 		decErr: errUnknown,
 	}, {
+		desc: "Decoder is invalid since TrustRootCAs() and NoVerification() are both set",
+		encOpts: []SignOption{
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+		},
+		input: Message{
+			Payload: []byte("Hello, world."),
+		},
+		decOpts: []DecoderOption{
+			TrustRootCAs(chainA.Root().Public),
+			NoVerification(),
+		},
+		decErr: errUnknown,
+	}, {
+		desc: "Decoder is invalid since neither TrustRootCAs() or NoVerification() are set",
+		encOpts: []SignOption{
+			SignWithRaw(jwa.ES256, chainA.Leaf().Public, chainA.Leaf().Private, chainA.Included()...),
+		},
+		input: Message{
+			Payload: []byte("Hello, world."),
+		},
+		decErr: errUnknown,
+	},
+
+	{
 		desc: "Try using signing algorith none, should fail",
 		encOpts: []SignOption{
 			SignWith("none", nil, nil),
