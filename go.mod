@@ -4,7 +4,7 @@ go 1.23.1
 
 require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tinylib/msgp v1.4.0
 	github.com/xmidt-org/jwskeychain v1.2.0
 )
