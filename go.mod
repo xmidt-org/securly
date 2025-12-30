@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	github.com/stretchr/testify v1.11.1
-	github.com/tinylib/msgp v1.6.1
+	github.com/tinylib/msgp v1.6.2
 	github.com/xmidt-org/jwskeychain v1.2.0
 )
 
