@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	github.com/stretchr/testify v1.12.0
+	github.com/stretchr/testify v1.12.1
 	github.com/tinylib/msgp v1.6.4
 	github.com/xmidt-org/jwskeychain v1.2.0
 )
@@ -19,7 +19,7 @@ require (
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
