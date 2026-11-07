@@ -52,7 +52,7 @@ type errorEncryptOption struct {
 	err error
 }
 
-func (e errorEncryptOption) apply(d *encrypter) error {
+func (e errorEncryptOption) apply(_ *encrypter) error {
 	return e.err
 }
 

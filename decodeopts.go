@@ -6,7 +6,7 @@ package securly
 import (
 	"context"
 	"crypto/x509"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/xmidt-org/jwskeychain"
@@ -95,6 +95,6 @@ func validateRoots() DecoderOption {
 			return nil
 		}
 
-		return fmt.Errorf("no trusted root CAs provided")
+		return errors.New("no trusted root CAs provided")
 	})
 }

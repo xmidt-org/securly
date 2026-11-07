@@ -240,10 +240,10 @@ func TestSigningTampering(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(buf)
 
-	for i := 0; i < len(buf); i++ {
+	for i := range buf {
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
-		tmp[i] = tmp[i] ^ 0xff
+		tmp[i] ^= 0xff
 
 		msg, err := Decode(tmp, complexWorking.decOpts...)
 
@@ -265,6 +265,8 @@ func TestEncDec(t *testing.T) {
 }
 
 func runEncDecTest(t *testing.T, tt encodeDecodeTest) {
+	t.Helper()
+
 	t.Run(tt.desc, func(t *testing.T) {
 		assert := assert.New(t)
 		require := require.New(t)

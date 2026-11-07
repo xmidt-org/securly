@@ -124,6 +124,8 @@ func TestEncryptDecrypt(t *testing.T) {
 }
 
 func runEncryptDecryptTest(t *testing.T, tt encryptDecryptTest) {
+	t.Helper()
+
 	t.Run(tt.desc, func(t *testing.T) {
 		assert := assert.New(t)
 		require := require.New(t)
@@ -161,6 +163,7 @@ func runEncryptDecryptTest(t *testing.T, tt encryptDecryptTest) {
 		assert.Equal(want, msg)
 	})
 }
+
 func TestEncryptingTampering(t *testing.T) {
 	// Require everything to prevent 100s of duplicate errors.
 	require := require.New(t)
@@ -169,10 +172,10 @@ func TestEncryptingTampering(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(buf)
 
-	for i := 0; i < len(buf); i++ {
+	for i := range buf {
 		tmp := make([]byte, len(buf))
 		copy(tmp, buf)
-		tmp[i] = tmp[i] ^ 0xff
+		tmp[i] ^= 0xff
 
 		msg, err := Decrypt(tmp, encryptExternalKey.decOpts...)
 		require.Nil(msg, "idx=%d 0x%02x '%c'", i, tmp[i]^0xff, tmp[i]^0xff)

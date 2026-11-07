@@ -111,7 +111,7 @@ func TestMarshalErrors(t *testing.T) {
 			"file1": {
 				Data:    []byte("file1 data"),
 				Size:    1000,
-				Mode:    0644,
+				Mode:    0o644,
 				ModTime: time.Now(),
 				Owner:   "owner",
 				UID:     1000,
@@ -129,9 +129,9 @@ func TestMarshalErrors(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, bytes)
 
-	for i := 0; i < len(bytes); i++ {
+	for i := range bytes {
 		tmp := bytes
-		tmp[i] = tmp[i] ^ 0xff
+		tmp[i] ^= 0xff
 
 		var got Message
 		n, err := got.UnmarshalMsg(tmp)
@@ -174,7 +174,7 @@ func TestEncode(t *testing.T) {
 					"file1": {
 						Data:    []byte("file1 data"),
 						Size:    1000,
-						Mode:    0644,
+						Mode:    0o644,
 						ModTime: time.Now(),
 						Owner:   "owner",
 						UID:     1000,
@@ -194,7 +194,7 @@ func TestEncode(t *testing.T) {
 					"file1": {
 						Data:    []byte("file1 data"),
 						Size:    1000,
-						Mode:    0644,
+						Mode:    0o644,
 						ModTime: time.Now(),
 						Owner:   "owner",
 						UID:     1000,
@@ -218,7 +218,7 @@ func TestEncode(t *testing.T) {
 					"file1": {
 						Data:    []byte("file1 data"),
 						Size:    1000,
-						Mode:    0644,
+						Mode:    0o644,
 						ModTime: time.Now(),
 						Owner:   "owner",
 						UID:     1000,
@@ -242,7 +242,7 @@ func TestEncode(t *testing.T) {
 					"file1": {
 						Data:    []byte("file1 data"),
 						Size:    1000,
-						Mode:    0644,
+						Mode:    0o644,
 						ModTime: time.Now(),
 						Owner:   "owner",
 						UID:     1000,

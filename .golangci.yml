@@ -4,18 +4,46 @@
 version: "2"
 linters:
   enable:
+    - asasalint
+    - asciicheck
+    - bidichk
     - bodyclose
+    - copyloopvar
     - dupl
-    - errorlint
-    - goconst
-    - gosec
-    - misspell
-    - prealloc
-    - testifylint
-    - unconvert
-  disable:
+    - dupword
+    - durationcheck
     - errcheck
+    - errname
+    - errorlint
+    - exptostd
+    - fatcontext
+    - gocheckcompilerdirectives
+    - goconst
+    - gocritic
+    - godot
+    - gosec
     - ineffassign
+    - intrange
+    - makezero
+    - mirror
+    - misspell
+    - modernize
+    - nilerr
+    - nilnesserr
+    - nolintlint
+    - perfsprint
+    - prealloc
+    - predeclared
+    - revive
+    - testifylint
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
   settings:
     errorlint:
       errorf: false
@@ -32,6 +60,7 @@ linters:
       - linters:
           - dupl
           - funlen
+          - goconst
         path: _test.go
       - linters:
           - gosec
@@ -52,6 +81,9 @@ linters:
       - builtin$
       - examples$
 formatters:
+  enable:
+    - gofmt
+    - goimports
   exclusions:
     generated: lax
     paths:

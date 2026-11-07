@@ -14,7 +14,7 @@ type decrypter struct {
 }
 
 // Decrypt converts a byte slice into a *Message and decodes
-// it it using the provided key.
+// it using the provided key.
 func Decrypt(buf []byte, opts ...DecryptOption) (*Message, error) {
 	d := decrypter{}
 

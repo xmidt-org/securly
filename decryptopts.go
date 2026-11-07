@@ -4,7 +4,7 @@
 package securly
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
@@ -24,7 +24,7 @@ type errorDecryptOption struct {
 	err error
 }
 
-func (e errorDecryptOption) apply(d *decrypter) error {
+func (e errorDecryptOption) apply(_ *decrypter) error {
 	return e.err
 }
 
@@ -62,7 +62,7 @@ type validateDecryptOption struct{}
 
 func (v validateDecryptOption) apply(d *decrypter) error {
 	if d.key == nil {
-		return fmt.Errorf("key is required")
+		return errors.New("key is required")
 	}
 	return nil
 }

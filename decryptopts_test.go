@@ -9,7 +9,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
@@ -45,7 +45,7 @@ func TestValidateDecrypt(t *testing.T) {
 			err := opt.apply(dec)
 			if tt.expectErr {
 				require.Error(t, err)
-				assert.Equal(t, fmt.Errorf("key is required"), err)
+				assert.Equal(t, errors.New("key is required"), err)
 			} else {
 				assert.NoError(t, err)
 			}
